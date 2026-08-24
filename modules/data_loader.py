@@ -354,9 +354,7 @@ def apply_bitable_sync_state(customers: List["Customer"]) -> List["Customer"]:
     Returns:
         list[Customer]: 合并同步状态后的新列表。
     """
-    from pathlib import Path as _Path
-
-    state_file = _Path("data/bitable_sync_state.json")
+    state_file = PROJECT_ROOT / "data" / "bitable_sync_state.json"
     if not state_file.exists():
         return customers
     try:

@@ -20,9 +20,8 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
-from config.settings import settings
 from modules import data_loader
 
 logger = logging.getLogger(__name__)
@@ -170,8 +169,9 @@ def _build_phone_rules(brief: Dict[str, Any], sales_name: str = "") -> str:
 # ============================================================
 
 def _llm_enabled() -> bool:
-    """是否启用 Kimi 话术生成(配置了 kimi_api_key 即启用, 独立于 mock_mode)。"""
-    return bool(settings.kimi_api_key)
+    """是否启用话术生成(当前 provider 已配置 key 即启用, 独立于 mock_mode)。"""
+    from modules import llm_client
+    return llm_client.enabled()
 
 
 def _generate_with_llm(brief: Dict[str, Any], track_type: str, sales_name: str) -> str:
@@ -179,7 +179,7 @@ def _generate_with_llm(brief: Dict[str, Any], track_type: str, sales_name: str) 
 
     失败则抛异常, 由上层降级规则模板。
     """
-    from modules import kimi_client
+    from modules import llm_client
 
     type_label = (
         "微信破冰开场白(简短、自然、有温度、可一键复制发送)"
@@ -203,7 +203,7 @@ def _generate_with_llm(brief: Dict[str, Any], track_type: str, sales_name: str) 
         f"3) 中文输出; 4) 直接输出话术正文, 不要任何解释说明或前缀标题。"
     )
 
-    return kimi_client.chat(system_prompt, prompt, max_tokens=2000, temperature=0.7)
+    return llm_client.chat(system_prompt, prompt, max_tokens=2000, temperature=0.7)
 
 
 # ============================================================

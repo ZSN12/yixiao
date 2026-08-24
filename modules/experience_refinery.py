@@ -34,7 +34,6 @@ from typing import Dict, List, Optional
 
 from pydantic import ValidationError
 
-from config.settings import settings
 from modules.data_loader import (
     PROJECT_ROOT,
     SalesExperience,
@@ -207,8 +206,9 @@ def _deal_to_scene(deal: dict) -> str:
 
 
 def _llm_enabled() -> bool:
-    """判断是否启用 LLM 引擎: 配置了 api_key 且未开 mock_mode。"""
-    return bool(settings.llm_api_key) and not settings.mock_mode
+    """判断是否启用 LLM 引擎: 当前 provider 已配置 key 即启用。"""
+    from modules import llm_client
+    return llm_client.enabled()
 
 
 # ============================================================
@@ -228,24 +228,14 @@ def _refine_with_llm(deal: dict) -> str:
     Raises:
         Exception: 网络/超时/格式/openai 未安装/校验失败 —— 由调用方降级到规则模板。
     """
-    from openai import OpenAI          # 延迟导入: openai 为可选依赖
+    from modules import llm_client
 
-    client = OpenAI(
-        api_key=settings.llm_api_key,
-        base_url=settings.llm_api_base,
-        timeout=settings.llm_timeout,
-    )
-    resp = client.chat.completions.create(
-        model=settings.llm_model,
-        messages=[
-            {"role": "system", "content": _SYSTEM_PROMPT},
-            {"role": "user", "content": json.dumps(deal, ensure_ascii=False)},
-        ],
-        response_format={"type": "json_object"},
+    data = llm_client.chat_json(
+        _SYSTEM_PROMPT,
+        json.dumps(deal, ensure_ascii=False),
+        max_tokens=1500,
         temperature=0.3,
     )
-    content_text = resp.choices[0].message.content or ""
-    data = json.loads(content_text)      # 非 JSON → 抛异常降级
     content = str(data.get("content", "")).strip()
     if not content:
         raise ValueError("LLM 返回的 content 为空")

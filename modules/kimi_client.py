@@ -21,7 +21,7 @@ import logging
 import re
 import ssl
 import urllib.request
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from config.settings import settings
 

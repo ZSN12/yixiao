@@ -128,8 +128,12 @@ def _safe(state: dict, key: str, default: Any = None) -> Any:
 
 
 def _llm_enabled() -> bool:
-    """判断节点内是否启用 LLM 调用: 配置了 Kimi key(独立于 mock_mode)。"""
-    return bool(getattr(settings, "kimi_api_key", "") or "")
+    """判断节点内是否启用 LLM 调用: 当前 provider 已配置 key 即启用。
+
+    未配置 key 时分析师/匹配师的 LLM 总结走规则文本, 不产生网络请求。
+    """
+    from modules import llm_client
+    return llm_client.enabled()
 
 
 def _llm_chat_completion(
@@ -137,7 +141,7 @@ def _llm_chat_completion(
     temperature: float = 0.2,
     max_tokens: int = 512,
 ) -> str:
-    """节点内调用 Kimi K2.7 Code(复用统一 kimi_client, 无 langchain)。
+    """节点内调用统一 LLM 网关(按 LLM_PROVIDER 分派 Kimi / OpenAI 兼容)。
 
     Args:
         messages: [{"role": ..., "content": ...}] 消息列表(system/user)。
@@ -150,7 +154,7 @@ def _llm_chat_completion(
     Raises:
         Exception: 网络/超时/鉴权等 —— 由调用方(节点)兜底降级。
     """
-    from modules import kimi_client
+    from modules import llm_client
 
     system = ""
     user = ""
@@ -159,7 +163,7 @@ def _llm_chat_completion(
             system = m.get("content", "")
         elif m.get("role") == "user":
             user = m.get("content", "")
-    return kimi_client.chat(system, user, max_tokens=max_tokens, temperature=temperature)
+    return llm_client.chat(system, user, max_tokens=max_tokens, temperature=temperature)
 
 
 # ============================================================

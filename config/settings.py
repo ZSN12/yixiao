@@ -6,7 +6,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file="config/.env", env_file_encoding="utf-8", extra="ignore")
-    # 大模型(OpenAI 兼容接口, 支持 DeepSeek/通义等)
+    # 统一 LLM 网关(llm_client)的 provider 选择: "kimi" | "openai"
+    # - kimi:   Anthropic Messages 接口(api.kimi.com/coding 等), 当前默认;
+    # - openai: OpenAI 兼容 Chat Completions(OpenAI/DeepSeek/通义/vLLM 等), 预留。
+    llm_provider: str = "kimi"
+    # 大模型(OpenAI 兼容接口, 支持 DeepSeek/通义等)—— llm_provider="openai" 时生效
     llm_api_base: str = "https://api.deepseek.com/v1"
     llm_api_key: str = ""
     llm_model: str = "deepseek-chat"
@@ -14,7 +18,7 @@ class Settings(BaseSettings):
     # Kimi K2.7 Code(Anthropic Messages 接口, 用于话术生成等语义任务);
     # base_url 形如 https://api.kimi.com/coding, 实际请求追加 /v1/messages。
     kimi_api_base: str = "https://api.kimi.com/coding"
-    kimi_api_key: str = ""          # 对应环境变量 KIMI_CODING_API_KEY
+    kimi_api_key: str = ""          # 对应环境变量 KIMI_API_KEY
     kimi_model: str = "kimi-for-coding"   # Kimi K2.7 Code
     # 钉钉自定义机器人
     dingtalk_webhook_url: str = ""
@@ -29,8 +33,9 @@ class Settings(BaseSettings):
     feishu_app_secret: str = ""
     # 易销网页应用公网地址(销售从飞书卡片/网页应用进入易销移动端的入口; 注意 trycloudflare 临时地址重启会变)
     feishu_webapp_url: str = ""
-    # 飞书多维表格(Bitable)同步配置: base_token 与各表 table_id, 用于双向实时同步
-    feishu_base_token: str = "MMN8bUDu6aLOLEs9UHOcDZaanMf"
+    # 飞书多维表格(Bitable)同步配置: base_token 属访问凭证, 请在 config/.env 配置,
+    # 勿写死在源码中; table_id 非敏感, 可给默认值。
+    feishu_base_token: str = ""
     feishu_base_leads_table: str = "tbluJCdsnsMaWYYD"      # 客户线索池
     feishu_base_sales_table: str = "tbl9XxtsQVMt30Gr"      # 销售团队画像
     feishu_base_memory_table: str = "tblJeTx2w24LvQdc"     # 分配记录与记忆中心
@@ -43,7 +48,9 @@ class Settings(BaseSettings):
     db_path: str = "data/sales_agent.db"
     # 调度
     daily_run_time: str = "08:30"
-    # Mock 模式: True 时画像分析走规则引擎(不调大模型), 开箱即跑; api_key 为空时自动视为 mock
+    # Mock 模式: True 时「飞书个人通知」等主动推送静默跳过, 避免测试/演示产生真实外呼;
+    # 画像分析/销售画像/话术等语义任务是否走 Kimi 取决于 kimi_api_key 是否配置
+    # (未配置 key 时自动降级规则引擎)。
     mock_mode: bool = True
     # RAG 检索 - embedding(可选): 配置了就走 API 向量检索, 未配置则用零依赖本地文本相似度兜底
     embedding_api_base: str = ""    # 如 "https://api.openai.com/v1" 或通义等兼容端点

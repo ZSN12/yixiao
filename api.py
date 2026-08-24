@@ -47,11 +47,13 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from modules import agent_memory, data_loader  # noqa: E402
 from modules import bitable_sync  # noqa: E402
+from modules import data_source_registry  # noqa: E402
 from modules import follow_up_notes  # noqa: E402
 from modules import lead_assigner  # noqa: E402
 from modules import sales_profile_engine  # noqa: E402
 from modules import sla_monitor  # noqa: E402
 from modules import talk_track  # noqa: E402
+from modules import user_auth  # noqa: E402
 from orchestrator import language_graph_flow as lgf  # noqa: E402
 
 logger = logging.getLogger(__name__)
@@ -65,6 +67,22 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+def _startup_seed_admin() -> None:
+    """应用启动时确保超级管理员种子账号存在(admin/123456)。
+
+    注: 用 on_event 而非 lifespan, 兼容当前 FastAPI 0.115 及旧版(避免
+    lifespan 上下文在 TestClient 下额外接线)。"""
+    try:
+        user_auth.ensure_seed_admin()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("启动时创建种子管理员失败: %s", exc)
+    try:
+        data_source_registry.ensure_seed_sources()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("启动时写入预置数据源失败: %s", exc)
 
 
 # ============================================================
@@ -96,6 +114,101 @@ class SalesCreateRequest(BaseModel):
     current_load: int = 0
     mobile: str = ""
     open_id: str = ""
+
+
+class LoginRequest(BaseModel):
+    """登录请求体。"""
+
+    username: str
+    password: str
+
+
+class DataSourceCreateRequest(BaseModel):
+    """新增数据源请求体。"""
+
+    name: str
+    type: str
+    config: Dict[str, Any] = {}
+    enabled: bool = True
+
+
+class DataSourceUpdateRequest(BaseModel):
+    """编辑数据源请求体(所有字段可选)。"""
+
+    name: Optional[str] = None
+    config: Optional[Dict[str, Any]] = None
+    enabled: Optional[bool] = None
+    status: Optional[str] = None
+
+
+# ============================================================
+# 数据源中心 CRUD API
+# ============================================================
+
+
+@app.get("/api/data-sources/types")
+def data_source_types() -> Dict[str, Any]:
+    """返回预置数据源类型定义(前端「添加数据源」弹窗的下拉/表单依据)。"""
+    return {"types": data_source_registry.SOURCE_TYPES}
+
+
+@app.get("/api/data-sources")
+def list_data_sources() -> Dict[str, Any]:
+    """列出全部数据源(含停用)。"""
+    try:
+        return {"sources": data_source_registry.list_sources()}
+    except Exception as exc:  # noqa: BLE001
+        logger.error("列出数据源失败: %s", exc)
+        raise HTTPException(status_code=500, detail=f"列出数据源失败: {exc}")
+
+
+@app.post("/api/data-sources", status_code=201)
+def create_data_source(body: DataSourceCreateRequest) -> Dict[str, Any]:
+    """新增一个数据源。"""
+    try:
+        row = data_source_registry.add_source(body.name, body.type, body.config, body.enabled)
+        return {"source": row}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:  # noqa: BLE001
+        logger.error("新增数据源失败: %s", exc)
+        raise HTTPException(status_code=500, detail=f"新增数据源失败: {exc}")
+
+
+@app.patch("/api/data-sources/{source_id}")
+def update_data_source(source_id: int, body: DataSourceUpdateRequest) -> Dict[str, Any]:
+    """编辑/启停一个数据源。"""
+    try:
+        row = data_source_registry.update_source(
+            source_id,
+            name=body.name,
+            config=body.config,
+            enabled=body.enabled,
+            status=body.status,
+        )
+        if row is None:
+            raise HTTPException(status_code=404, detail="数据源不存在")
+        return {"source": row}
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        logger.error("更新数据源失败: %s", exc)
+        raise HTTPException(status_code=500, detail=f"更新数据源失败: {exc}")
+
+
+@app.delete("/api/data-sources/{source_id}")
+def delete_data_source(source_id: int) -> Dict[str, Any]:
+    """删除一个数据源。"""
+    try:
+        ok = data_source_registry.delete_source(source_id)
+        if not ok:
+            raise HTTPException(status_code=404, detail="数据源不存在")
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        logger.error("删除数据源失败: %s", exc)
+        raise HTTPException(status_code=500, detail=f"删除数据源失败: {exc}")
 
 
 # ============================================================
@@ -131,6 +244,52 @@ def _feishu_card_response(card: Optional[Dict[str, Any]] = None, toast: Optional
     if toast:
         payload["toast"] = toast
     return payload
+
+
+# ============================================================
+# 端点: 用户认证(登录 / 登出 / 当前用户)
+# ============================================================
+
+
+@app.post("/api/login")
+def api_login(req: LoginRequest) -> Dict[str, Any]:
+    """用户登录: 校验账号密码, 成功返回 token + 用户信息。
+
+    Args:
+        req: {username, password}。
+
+    Returns:
+        dict: {token, username, role, display_name}。
+
+    Raises:
+        HTTPException(401): 账号或密码错误。
+    """
+    result = user_auth.login(req.username, req.password)
+    if result is None:
+        raise HTTPException(status_code=401, detail="账号或密码错误")
+    return result
+
+
+@app.post("/api/logout")
+def api_logout(request: Request) -> Dict[str, Any]:
+    """用户登出: 清除会话 token。"""
+    token = (request.headers.get("authorization", "") or "").replace("Bearer ", "").strip()
+    user_auth.logout(token)
+    return {"status": "ok"}
+
+
+@app.get("/api/me")
+def api_me(request: Request) -> Dict[str, Any]:
+    """获取当前登录用户信息(校验 token)。
+
+    Returns:
+        dict: {username, role, display_name} 或 {authenticated: False}。
+    """
+    token = (request.headers.get("authorization", "") or "").replace("Bearer ", "").strip()
+    sess = user_auth.get_session(token)
+    if sess is None:
+        return {"authenticated": False}
+    return {"authenticated": True, **sess}
 
 
 # ============================================================
@@ -335,8 +494,6 @@ def get_talk_track(customer_id: str, track_type: str = "wechat", sales_id: str =
         dict: {customer_id, customer_name, track_type, content, engine}。
             engine 为 "llm"(Kimi K2.7 Code) | "rules"(规则模板)。
     """
-    from modules import talk_track
-
     # 反查销售姓名(用于话术署名)
     sales_name = ""
     if sales_id:
@@ -977,7 +1134,6 @@ async def feishu_card_action(request: Request) -> Dict[str, Any]:
             operator_sales = _find_sales_by_open_id(operator_open_id) or {}
             sales_name = operator_sales.get("name") or operator_sales.get("sales_id") or ""
 
-            from modules import talk_track
             from modules import feishu_app_notifier
 
             result = talk_track.generate_talk_track(customer_id, track_type, sales_name)

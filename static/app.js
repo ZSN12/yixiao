@@ -11,7 +11,12 @@
     loadingCustomers: false, loadingSales: false, loadingSummary: false,
     runningPipeline: false, expandedCustomer: null, profileCache: {},
     loadingProfile: "", reassignTarget: null, corrections: {},
-    currentSales: null, salesMode: false
+    currentSales: null, salesMode: false,
+    dataSources: [], loadingSources: false, sourceTypes: {},
+    // 登录态
+    authenticated: false, authUser: null, authToken: "", authChecking: true,
+    loginForm: { username: "", password: "" }, loggingIn: false,
+    showUserMenu: false, logoutConfirm: false
   });
 
   /* ---- Toast ---- */
@@ -26,6 +31,7 @@
   function api(url, opts) {
     opts = opts || {};
     opts.headers = opts.headers || {};
+    if (store.authToken) opts.headers["Authorization"] = "Bearer " + store.authToken;
     if (opts.body && !opts.headers["Content-Type"]) opts.headers["Content-Type"] = "application/json";
     return fetch(url, opts).then(function(r) {
       return r.json().catch(function(){return{};}).then(function(d) {
@@ -45,6 +51,14 @@
     assignments: SVG_OPEN + '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></svg>',
     memories: SVG_OPEN + '<path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.4 1 2.3h6c0-.9.4-1.8 1-2.3A7 7 0 0 0 12 2z"/></svg>',
     sources: SVG_OPEN + '<path d="M9 7V3"/><path d="M15 7V3"/><path d="M12 21v-5"/><path d="M7 7h10v4a5 5 0 0 1-10 0V7z"/></svg>',
+    file: SVG_OPEN + '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>',
+    chat: SVG_OPEN + '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+    database: SVG_OPEN + '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>',
+    table: SVG_OPEN + '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>',
+    link: SVG_OPEN + '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>',
+    toggle: SVG_OPEN + '<rect x="2" y="6" width="20" height="12" rx="6"/><circle cx="8" cy="12" r="2.5"/></svg>',
+    plus: SVG_OPEN + '<path d="M12 5v14M5 12h14"/></svg>',
+    edit: SVG_OPEN + '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>',
     team: SVG_OPEN + '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
     userPlus: SVG_OPEN + '<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>',
     trash: SVG_OPEN + '<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
@@ -82,6 +96,28 @@
       store.memories=l||[]; store.corrections={};
       (store.memories||[]).forEach(function(m){if(m.customer_id&&m.correct_sales_id)store.corrections[m.customer_id]=m.correct_sales_id;});
     }).catch(function(e){toast("加载记忆失败:"+e.message,"error");store.memories=[];});
+  }
+  function loadDataSources() {
+    store.loadingSources = true;
+    return api("/api/data-sources").then(function(d){
+      store.dataSources = d.sources || [];
+      return api("/api/data-sources/types").then(function(t){
+        store.sourceTypes = t.types || {};
+      });
+    }).catch(function(e){toast("加载数据源失败:"+e.message,"error");store.dataSources=[];})
+      .finally(function(){store.loadingSources=false;});
+  }
+  function addDataSource(payload) {
+    return api("/api/data-sources", {method:"POST", body:JSON.stringify(payload)})
+      .then(function(){ return loadDataSources(); });
+  }
+  function updateDataSource(id, payload) {
+    return api("/api/data-sources/"+id, {method:"PATCH", body:JSON.stringify(payload)})
+      .then(function(){ return loadDataSources(); });
+  }
+  function deleteDataSource(id) {
+    return api("/api/data-sources/"+id, {method:"DELETE"})
+      .then(function(){ return loadDataSources(); });
   }
   function loadProfile(cid) {
     if(store.profileCache[cid]){store.expandedCustomer=cid;return Promise.resolve();}
@@ -128,9 +164,207 @@
       .then(function(){toast("已移除销售: "+name,"success"); return loadSales();});
   }
 
+  /* ---- 登录态 ---- */
+  function persistAuth(token, user) {
+    store.authToken = token || "";
+    store.authUser = user || null;
+    store.authenticated = !!(token && user);
+    try {
+      if (token) localStorage.setItem("yx_auth_token", token);
+      else localStorage.removeItem("yx_auth_token");
+    } catch(e){}
+  }
+  function doLogin() {
+    if (store.loggingIn) return;
+    var u = (store.loginForm.username||"").trim();
+    var p = store.loginForm.password||"";
+    if (!u || !p) { toast("请输入账号和密码","error"); return; }
+    store.loggingIn = true;
+    return api("/api/login", {method:"POST", body:JSON.stringify({username:u, password:p})})
+      .then(function(d) {
+        persistAuth(d.token, {username:d.username, role:d.role, display_name:d.display_name});
+        toast("登录成功，欢迎 " + (d.display_name || d.username),"success");
+        store.loginForm.password = "";
+        bootAfterAuth();
+      })
+      .catch(function(e){ toast("登录失败：" + e.message,"error"); })
+      .finally(function(){ store.loggingIn = false; });
+  }
+  function doLogout() {
+    api("/api/logout", {method:"POST"}).catch(function(){});
+    persistAuth("", null);
+    toast("已退出登录","info");
+  }
+  function restoreAuth() {
+    // 从 localStorage 恢复 token, 向后端校验有效性
+    var token = "";
+    try { token = localStorage.getItem("yx_auth_token") || ""; } catch(e){}
+    if (!token) { store.authChecking = false; return; }
+    store.authToken = token;
+    return api("/api/me").then(function(d) {
+      if (d && d.authenticated) {
+        persistAuth(token, {username:d.username, role:d.role, display_name:d.display_name});
+      } else {
+        persistAuth("", null);
+      }
+    }).catch(function(){
+      persistAuth("", null);
+    }).finally(function(){ store.authChecking = false; });
+  }
+  function bootAfterAuth() {
+    // 登录成功后加载主数据
+    loadCustomers();
+    loadSales().then(function(){
+      try {
+        var p = new URLSearchParams(location.search);
+        var oid = p.get("open_id") || p.get("openId") || p.get("user_id") || "";
+        if (oid) {
+          var matched = (store.sales||[]).find(function(s){ return s.open_id === oid; });
+          if (matched) {
+            store.currentSales = matched;
+            store.salesMode = true;
+            store.route = "customers";
+            location.hash = "#/customers";
+            toast("欢迎回来，" + matched.name + " (" + matched.sales_id + ")！已为您呈现专属客户画像", "success");
+          }
+        }
+      } catch(e){}
+      applyRoute(location.hash);
+    });
+    loadSummary(); loadMemories(); loadDataSources();
+  }
+
   /* ---- 模板 ---- */
   var T_ROOT = '<div>'
     + '<div v-if="!booted" class="boot-screen"><div class="boot-logo">易</div><div class="spinner"></div><p>易销平台加载中…</p></div>'
+    + '<div v-else-if="authChecking" class="boot-screen"><div class="boot-logo">易</div><div class="spinner"></div><p>正在校验登录状态…</p></div>'
+    + '<div v-else-if="!authenticated" class="login-stage">'
+    + '  <!-- 科技背景矢量几何图形图层 -->'
+    + '  <div class="stage-mesh-bg"></div>'
+    + '  <div class="stage-orbit orbit-1"></div>'
+    + '  <div class="stage-orbit orbit-2"></div>'
+    + '  <div class="stage-orbit orbit-3"></div>'
+    + '  <div class="stage-glow glow-top-left"></div>'
+    + '  <div class="stage-glow glow-center-right"></div>'
+    + '  <div class="stage-glow glow-bottom-center"></div>'
+    + '  <div class="stage-container">'
+    + '    <!-- 左侧: 品牌与 AI 实时中枢流转大屏 -->'
+    + '    <div class="stage-left">'
+    + '      <div class="brand-pill">'
+    + '        <div class="brand-pill-logo">易</div>'
+    + '        <div class="brand-pill-text">'
+    + '          <span class="p-title">易销</span>'
+    + '          <span class="p-divider">/</span>'
+    + '          <span class="p-sub">智能线索中枢</span>'
+    + '        </div>'
+    + '        <div class="live-status-chip"><span class="chip-dot"></span><span>AI 引擎运行中</span></div>'
+    + '      </div>'
+    + '      <h1 class="stage-headline">'
+    + '        让线索流转更具<span class="gradient-word">确定性</span>'
+    + '      </h1>'
+    + '      <p class="stage-desc">'
+    + '        基于深度语义画像与销售经验图谱，实现多维表格实时同步与智能策略分发。'
+    + '      </p>'
+    + '      <!-- 核心 AI 智能体实时流转看板 -->'
+    + '      <div class="agent-live-console">'
+    + '        <div class="console-head">'
+    + '          <div class="console-title"><span class="ico-spark">✨</span> 实时线索意向管线 (Pipeline Live)</div>'
+    + '          <div class="console-time"><span class="dot-live-pulse"></span> 24h 自动化调度</div>'
+    + '        </div>'
+    + '        <div class="console-lead-row">'
+    + '          <div class="lead-avatar-box"><span class="lead-char">博</span></div>'
+    + '          <div class="lead-info-main">'
+    + '            <div class="lead-name-text">苏州博创智能装备有限公司</div>'
+    + '            <div class="lead-sub-chips">'
+    + '              <span class="c-tag tag-intent">🔥 高意向 94%</span>'
+    + '              <span class="c-tag">智能制造</span>'
+    + '              <span class="c-tag">预算 500 万</span>'
+    + '            </div>'
+    + '          </div>'
+    + '          <div class="lead-score-badge">'
+    + '            <div class="score-num">96<span class="score-unit">%</span></div>'
+    + '            <div class="score-label">智能匹配度</div>'
+    + '          </div>'
+    + '        </div>'
+    + '        <div class="console-dispatch-track">'
+    + '          <div class="track-flow-line"><div class="track-flow-dot"></div></div>'
+    + '          <div class="track-sales-card">'
+    + '            <div class="sales-mini-avatar">张</div>'
+    + '            <div class="sales-mini-info">'
+    + '              <div class="s-name">张伟 <span class="s-id">S001 · 资深销售</span></div>'
+    + '              <div class="s-exp">制造业胜率 67% · 专属战术破冰话术已生成</div>'
+    + '            </div>'
+    + '            <div class="s-action-status"><span class="dot-green"></span>飞书卡片待接单</div>'
+    + '          </div>'
+    + '        </div>'
+    + '      </div>'
+    + '      <!-- 3列科技数据图形指标 (充实视觉密度与几何感) -->'
+    + '      <div class="stage-metric-grid">'
+    + '        <div class="metric-card">'
+    + '          <div class="metric-icon-box m-icon-blue">'
+    + '            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>'
+    + '          </div>'
+    + '          <div class="metric-info">'
+    + '            <div class="metric-val">100%</div>'
+    + '            <div class="metric-lbl">飞书双向实时闭环</div>'
+    + '          </div>'
+    + '        </div>'
+    + '        <div class="metric-card">'
+    + '          <div class="metric-icon-box m-icon-purple">'
+    + '            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 2v20M2 12h20"/></svg>'
+    + '          </div>'
+    + '          <div class="metric-info">'
+    + '            <div class="metric-val">双引擎</div>'
+    + '            <div class="metric-lbl">AI+规则智能画像</div>'
+    + '          </div>'
+    + '        </div>'
+    + '        <div class="metric-card">'
+    + '          <div class="metric-icon-box m-icon-green">'
+    + '            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>'
+    + '          </div>'
+    + '          <div class="metric-info">'
+    + '            <div class="metric-val">SLA 守护</div>'
+    + '            <div class="metric-lbl">超时自动流转公海</div>'
+    + '          </div>'
+    + '        </div>'
+    + '      </div>'
+    + '    </div>'
+    + '    <!-- 右侧: 纯粹极简的高质感玻璃登录盒子 -->'
+    + '    <div class="stage-right">'
+    + '      <div class="glass-login-box">'
+    + '        <div class="login-box-top">'
+    + '          <div class="login-badge-mini">SYSTEM ACCESS</div>'
+    + '          <h2>欢迎登录易销</h2>'
+    + '          <p class="login-tip">输入账号密码接入智能分发工作台</p>'
+    + '        </div>'
+    + '        <div class="login-inputs-area">'
+    + '          <div class="input-field">'
+    + '            <label>登录账号</label>'
+    + '            <div class="input-bar">'
+    + '              <span class="bar-icon" v-html="icons.dashboard"></span>'
+    + '              <input v-model="loginForm.username" placeholder="请输入账号" @keyup.enter="doLogin()" autocomplete="username" />'
+    + '            </div>'
+    + '          </div>'
+    + '          <div class="input-field">'
+    + '            <label>访问密码</label>'
+    + '            <div class="input-bar">'
+    + '              <span class="bar-icon" v-html="icons.memories"></span>'
+    + '              <input type="password" v-model="loginForm.password" placeholder="请输入密码" @keyup.enter="doLogin()" autocomplete="current-password" />'
+    + '            </div>'
+    + '          </div>'
+    + '          <button class="stage-submit-btn" @click="doLogin()" :disabled="loggingIn">'
+    + '            <span v-if="loggingIn" class="btn-spinner"></span>'
+    + '            <span v-text="loggingIn?\'正在鉴权…\':\'登 录\'"></span>'
+    + '          </button>'
+    + '        </div>'
+    + '        <div class="login-security-tag">'
+    + '          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>'
+    + '          <span>企业级权限隔离与数据加密传输</span>'
+    + '        </div>'
+    + '      </div>'
+    + '    </div>'
+    + '  </div>'
+    + '</div>'
     + '<div v-else class="yx-layout">'
     + '<aside class="yx-sidebar">'
     + '<div class="yx-brand"><div class="yx-logo">易</div><div class="yx-brand-t"><div class="yx-brand-name">易销</div><div class="yx-brand-sub">销售线索智能分发</div></div></div>'
@@ -152,7 +386,35 @@
     + '<a :class="navClass(\'customers\')" href="#/customers"><span class="nav-ico" v-html="icons.customers"></span><span>我的客户画像</span></a>'
     + '</template>'
     + '</nav>'
-    + '<div class="yx-sidebar-foot"><div class="health-chip"><span class="yx-health-dot" :class="health?\'ok\':\'err\'"></span><span v-text="health?\'后端在线\':\'后端离线\'"></span></div><span class="foot-ver">v1.0</span></div>'
+    + '<div class="yx-sidebar-foot">'
+    + '<div class="user-module" @click="toggleUserMenu()">'
+    + '<span class="auth-avatar" v-text="authUser?(authUser.display_name||authUser.username).slice(0,1):\'?\'"></span>'
+    + '<span class="auth-name" v-text="authUser?(authUser.display_name||authUser.username):\'未登录\'"></span>'
+    + '</div>'
+    + '</div>'
+    + '<transition name="user-pop">'
+    + '<div class="user-menu" v-if="showUserMenu" @click.stop>'
+    + '<div class="user-menu-head">'
+    + '<span class="auth-avatar lg" v-text="authUser?(authUser.display_name||authUser.username).slice(0,1):\'?\'"></span>'
+    + '<div class="user-menu-id"><strong v-text="authUser?(authUser.display_name||authUser.username):\'未登录\'"></strong><span v-text="authUser?authUser.username+\' · \'+(authUser.role===\'super_admin\'?\'超级管理员\':authUser.role):\'\'"></span></div>'
+    + '</div>'
+    + '<div class="user-menu-sep"></div>'
+    + '<button class="user-menu-item" @click="requestLogout()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></svg><span>退出登录</span></button>'
+    + '</div>'
+    + '</transition>'
+    + '<div class="modal-mask" v-if="logoutConfirm" @click.self="cancelLogout()">'
+    + '<div class="modal" style="width:400px;max-width:92vw;text-align:center">'
+    + '<div class="confirm-ico">'
+    + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></svg>'
+    + '</div>'
+    + '<h3 style="font-size:20px;margin:0 0 8px">确认退出登录？</h3>'
+    + '<p style="margin:0 0 20px;color:var(--muted);font-size:13.5px">退出后将返回登录页面，需要重新输入账号密码。</p>'
+    + '<div style="display:flex;justify-content:center;gap:12px">'
+    + '<button class="btn btn-ghost" @click="cancelLogout()">取消</button>'
+    + '<button class="btn" style="background:linear-gradient(135deg,#f43f5e,#e11d48);color:#fff;border:none" @click="doLogout()">退出登录</button>'
+    + '</div>'
+    + '</div>'
+    + '</div>'
     + '</aside>'
     + '<div class="yx-main">'
     + '<header class="yx-topbar"><div class="yx-topbar-title" v-text="salesMode?(currentSales?currentSales.name+\' · 客户画像\':\'客户画像\'):pageTitle"></div>'
@@ -388,20 +650,58 @@
     + '<td><span class="badge" :class="m.source===\'strong\'?\'badge-strong\':\'badge-weak\'" v-text="m.source===\'strong\'?\'强记忆\':\'弱记忆\'"></span></td>'
     + '</tr></tbody></table></section></div>';
 
-  var T_SRC = '<div class="view-anim"><section class="card">'
-    + '<div class="card-head"><h3>真实数据适配层</h3><span class="card-sub">输出与 mock 同构, 流水线零改动</span></div>'
-    + '<table class="yx-table"><thead><tr><th>接口</th><th>来源</th><th>状态</th></tr></thead><tbody>'
-    + '<tr><td><code>fetch_crm_customers()</code></td><td>CRM 客户列表</td><td><span class="badge badge-ok">已预留</span></td></tr>'
-    + '<tr><td><code>fetch_wework_chat()</code></td><td>企微会话存档</td><td><span class="badge badge-ok">已预留</span></td></tr>'
-    + '<tr><td><code>fetch_crm_deals()</code></td><td>CRM 成交商机</td><td><span class="badge badge-ok">已预留</span></td></tr>'
-    + '<tr><td><code>adapters/crm_data_adapter</code></td><td>CSV + 企微 JSON → 同构</td><td><span class="badge badge-flip">可运行</span></td></tr>'
-    + '</tbody></table></section>'
-    + '<section class="card"><div class="card-head"><h3>通知通道</h3><span class="card-sub">加签 HMAC-SHA256 · 配置后自动推送日报</span></div>'
-    + '<table class="yx-table"><thead><tr><th>通道</th><th>配置项</th><th>状态</th></tr></thead><tbody>'
-    + '<tr><td>飞书群机器人</td><td><code>FEISHU_WEBHOOK_URL / FEISHU_SECRET</code></td><td><span class="badge badge-flip">待配置</span></td></tr>'
-    + '<tr><td>钉钉群机器人</td><td><code>DINGTALK_WEBHOOK_URL / DINGTALK_SECRET</code></td><td><span class="badge badge-flip">待配置</span></td></tr>'
-    + '<tr><td>个人工作通知</td><td>飞书企业自建应用 <code>FEISHU_APP_ID / SECRET</code></td><td><span class="badge badge-ok">已接入</span></td></tr>'
-    + '</tbody></table></section></div>';
+  var T_SRC = '<div class="view-anim">'
+    + '<div class="toolbar">'
+    + '<div class="search-wrap"><span class="search-ico" v-html="ico.search"></span><input class="search-input" v-model="q" placeholder="搜索数据源名称 / 类型…"></div>'
+    + '<div style="flex:1"></div>'
+    + '<button class="btn btn-ghost" @click="reload()" :disabled="loading"><span class="btn-ico" v-html="ico.refresh"></span>刷新</button>'
+    + '<button class="btn btn-primary" @click="openAdd()"><span class="btn-ico" v-html="ico.plus"></span>添加数据源</button>'
+    + '</div>'
+    + '<section class="card">'
+    + '<div class="card-head"><h3>数据源接入中心</h3><span class="card-sub" v-text="\'共 \'+filtered.length+\' 个数据源 · 选择类型并配置即可接入流水线，可随时启停与删除\'"></span></div>'
+    + '<div class="empty-hint" v-if="!loading && filtered.length===0">暂无数据源，点击右上角「添加数据源」开始接入</div>'
+    + '<div class="ds-grid" v-else>'
+    + '<div class="ds-card" v-for="s in filtered" :key="s.id" :class="{\'ds-disabled\': !s.enabled}">'
+    + '<div class="ds-card-top">'
+    + '<div class="ds-type-icon" :style="typeIconStyle(s.type)"><span v-html="typeIcon(s.type)"></span></div>'
+    + '<div class="ds-title"><strong v-text="s.name"></strong><div class="ds-type-label"><span v-text="s.type_label"></span><span v-if="s.builtin" class="ds-builtin">预置</span></div></div>'
+    + '<div class="ds-status"><span class="badge" :class="statusClass(s)" v-text="s.status"></span></div>'
+    + '</div>'
+    + '<div class="ds-config">'
+    + '<div v-for="(v, k) in (s.config||{})" :key="k" class="ds-config-row"><span class="ds-config-key" v-text="k"></span><code v-text="formatConfigVal(v)"></code></div>'
+    + '<div v-if="!(s.config&&Object.keys(s.config).length)" class="muted" style="font-size:12px">未配置参数</div>'
+    + '</div>'
+    + '<div class="ds-desc" v-text="s.type_desc"></div>'
+    + '<div class="ds-foot">'
+    + '<span v-if="s.last_pulled_at" class="muted" style="font-size:11px">最近拉取: {{ s.last_pulled_at }}</span>'
+    + '<span v-else class="muted" style="font-size:11px">尚未拉取</span>'
+    + '<div style="flex:1"></div>'
+    + '<button class="btn btn-small" :style="s.enabled?\'background:#fee2e2;color:#ef4444\':\'background:#dcfce7;color:#059669\'" @click="toggle(s)" :disabled="busy===s.id"><span class="btn-ico" v-html="ico.toggle"></span><span v-text="s.enabled?\'停用\':\'启用\'"></span></button>'
+    + '<button class="btn btn-small" style="background:#eef2ff;color:#4338ca;font-weight:700" @click="openEdit(s)"><span class="btn-ico" v-html="ico.edit"></span>编辑</button>'
+    + '<button class="btn btn-small" style="background:#fee2e2;color:#ef4444" @click="del(s)"><span class="btn-ico" v-html="ico.trash"></span>删除</button>'
+    + '</div>'
+    + '</div>'
+    + '</div>'
+    + '</section>'
+    + '<div class="modal-mask" v-if="showModal" @click.self="showModal=false">'
+    + '<div class="modal" style="width:520px;max-width:95vw">'
+    + '<h3 v-text="(editing?\'\':\'添加数据源\')"></h3>'
+    + '<div class="modal-body">'
+    + '<div style="margin-bottom:14px"><label>数据源类型</label>'
+    + '<div class="ds-type-picker">'
+    + '<div v-for="(def, t) in types" :key="t" class="ds-type-opt" :class="{\'active\': form.type===t}" @click="pickType(t)">'
+    + '<span class="ds-type-mini" :style="typeIconStyle(t)" v-html="typeIcon(t)"></span><span v-text="def.label"></span>'
+    + '</div>'
+    + '</div></div>'
+    + '<div style="margin-bottom:14px"><label>数据源名称</label><input v-model="form.name" class="search-input full" :placeholder="(types[form.type]||{}).label+\'名称\'"></div>'
+    + '<div v-for="f in (types[form.type]||{}).fields||[]" :key="f.key" style="margin-bottom:14px">'
+    + '<label v-text="f.label"></label><input v-model="form.config[f.key]" class="search-input full" :placeholder="f.placeholder">'
+    + '</div>'
+    + '<p style="font-size:12.5px;color:#6b7280;line-height:1.6;margin:0" v-text="(types[form.type]||{}).desc"></p>'
+    + '</div>'
+    + '<div class="modal-actions"><button class="btn btn-ghost" @click="showModal=false">取消</button>'
+    + '<button class="btn btn-primary" @click="save()" :disabled="saving"><span v-text="saving?\'保存中…\':(editing?\'保存修改\':\'确认接入\')"></span></button></div></div></div>'
+    + '</div>';
 
   var T_TOAST = '<div class="toast-stack">'
     + '<div v-for="t in ts" :key="t.id" :class="[\'toast\',\'toast-\'+(t.type||\'info\')]" v-text="t.message"></div></div>';
@@ -631,7 +931,126 @@
     }
   };
 
-  var C_Src = { template: T_SRC };
+  var C_Src = {
+    template: T_SRC,
+    data: function(){
+      return {
+        q: "",
+        showModal: false,
+        editing: null,
+        saving: false,
+        busy: "",
+        form: { name: "", type: "csv", config: {} }
+      };
+    },
+    computed: {
+      ico: function(){return ICONS;},
+      list: function(){return store.dataSources || [];},
+      types: function(){return store.sourceTypes || {};},
+      loading: function(){return store.loadingSources;},
+      filtered: function(){
+        var kw = this.q.trim().toLowerCase(), l = this.list;
+        if(!kw) return l;
+        return l.filter(function(s){
+          return (s.name||"").toLowerCase().indexOf(kw) >= 0 ||
+                 (s.type_label||"").toLowerCase().indexOf(kw) >= 0;
+        });
+      }
+    },
+    methods: {
+      reload: function(){ loadDataSources(); },
+      typeIcon: function(t){
+        var map = { csv:"file", wework:"chat", crm:"database", bitable:"table", webhook:"link" };
+        return ICONS[map[t] || "database"];
+      },
+      typeIconStyle: function(t){
+        var colors = {
+          csv:  "background:rgba(56,189,248,0.15);color:#38bdf8;border-color:rgba(56,189,248,0.3)",
+          wework:"background:rgba(52,211,153,0.15);color:#34d399;border-color:rgba(52,211,153,0.3)",
+          crm:  "background:rgba(168,85,247,0.15);color:#c084fc;border-color:rgba(168,85,247,0.3)",
+          bitable:"background:rgba(59,130,246,0.15);color:#60a5fa;border-color:rgba(59,130,246,0.3)",
+          webhook:"background:rgba(251,146,60,0.15);color:#fb923c;border-color:rgba(251,146,60,0.3)"
+        };
+        return colors[t] || "background:rgba(100,116,139,0.15);color:#94a3b8;border-color:rgba(100,116,139,0.3)";
+      },
+      statusClass: function(s){
+        if(!s.enabled) return "badge-flip";
+        if(s.status === "已接入" || s.status === "运行中") return "badge-ok";
+        if(s.status === "异常") return "badge-int-高";
+        return "badge";
+      },
+      formatConfigVal: function(v){
+        var str = String(v == null ? "" : v);
+        return str.length > 28 ? str.slice(0, 28) + "…" : str;
+      },
+      openAdd: function(){
+        this.editing = null;
+        this.form = { name: "", type: "csv", config: {} };
+        this.showModal = true;
+      },
+      pickType: function(t){
+        this.form.type = t;
+        this.form.config = {};
+        this.form.name = "";
+      },
+      openEdit: function(s){
+        this.editing = s;
+        var cfg = {};
+        var keys = Object.keys(s.config || {});
+        for(var i=0;i<keys.length;i++) cfg[keys[i]] = s.config[keys[i]];
+        this.form = { name: s.name, type: s.type, config: cfg };
+        this.showModal = true;
+      },
+      save: function(){
+        var self = this;
+        var fields = (this.types[this.form.type] || {}).fields || [];
+        for(var i=0;i<fields.length;i++){
+          if(fields[i].required && !(this.form.config[fields[i].key] || "").toString().trim()){
+            toast("请填写「" + fields[i].label + "」", "error"); return;
+          }
+        }
+        if(!this.form.name.trim()) { toast("请填写数据源名称", "error"); return; }
+        this.saving = true;
+        var payload = { name: this.form.name.trim(), type: this.form.type, config: this.form.config };
+        var p;
+        if(this.editing){
+          p = updateDataSource(this.editing.id, payload);
+        } else {
+          p = addDataSource(payload);
+        }
+        p.then(function(){
+          self.showModal = false;
+          self.editing = null;
+          toast("数据源保存成功", "success");
+        }).catch(function(e){
+          toast("保存失败: " + e.message, "error");
+        }).finally(function(){
+          self.saving = false;
+        });
+      },
+      toggle: function(s){
+        var self = this;
+        this.busy = s.id;
+        updateDataSource(s.id, { enabled: !s.enabled }).then(function(){
+          toast((s.enabled?"已停用":"已启用") + "「" + s.name + "」", "success");
+        }).catch(function(e){
+          toast("操作失败: " + e.message, "error");
+        }).finally(function(){
+          self.busy = "";
+        });
+      },
+      del: function(s){
+        var self = this;
+        if(confirm("确定要删除数据源「" + s.name + "」吗？此操作不可恢复。")) {
+          deleteDataSource(s.id).then(function(){
+            toast("已删除数据源「" + s.name + "」", "info");
+          }).catch(function(e){
+            toast("删除失败: " + e.message, "error");
+          });
+        }
+      }
+    }
+  };
 
   var C_Toast = {
     template: T_TOAST,
@@ -647,12 +1066,24 @@
       route: function(){return store.route;},
       health: function(){return store.health;},
       runningPipeline: function(){return store.runningPipeline;},
+      authenticated: function(){return store.authenticated;},
+      authChecking: function(){return store.authChecking;},
+      authUser: function(){return store.authUser;},
+      showUserMenu: function(){return store.showUserMenu;},
+      logoutConfirm: function(){return store.logoutConfirm;},
+      loginForm: function(){return store.loginForm;},
+      loggingIn: function(){return store.loggingIn;},
       pageTitle: function(){return{dashboard:"工作台",customers:"客户画像",assignments:"智能分配",team:"销售团队",memories:"记忆中心",sources:"数据接入"}[store.route]||"易销";}
     },
     methods: {
       navClass: function(name){ return store.route === name ? "yx-nav-item active" : "yx-nav-item"; },
       refresh: function(){loadCustomers();loadSales();loadSummary();loadMemories();toast("已刷新","info");},
-      run: runPipeline
+      run: runPipeline,
+      doLogin: doLogin,
+      toggleUserMenu: function(){ store.showUserMenu = !store.showUserMenu; },
+      requestLogout: function(){ store.showUserMenu = false; store.logoutConfirm = true; },
+      cancelLogout: function(){ store.logoutConfirm = false; },
+      doLogout: function(){ store.logoutConfirm = false; doLogout(); }
     }
   });
 
@@ -682,26 +1113,18 @@
   app.mount("#app");
   store.booted = true;
 
+  // 点击用户模块外部时关闭用户下拉菜单
+  document.addEventListener("click", function(e){
+    var menu = e.target.closest ? e.target.closest(".user-module, .user-menu") : null;
+    if (!menu) store.showUserMenu = false;
+  });
+
   api("/health").then(function(){store.health=true;}).catch(function(){store.health=false;toast("后端离线","error");});
   restoreAssignments();
-  loadCustomers();
-  loadSales().then(function(){
-    try {
-      var p = new URLSearchParams(location.search);
-      var oid = p.get("open_id") || p.get("openId") || p.get("user_id") || "";
-      if (oid) {
-        var matched = (store.sales||[]).find(function(s){ return s.open_id === oid; });
-        if (matched) {
-          store.currentSales = matched;
-          store.salesMode = true;
-          // 销售进入: 自动锁定至客户画像页
-          store.route = "customers";
-          location.hash = "#/customers";
-          toast("欢迎回来，" + matched.name + " (" + matched.sales_id + ")！已为您呈现专属客户画像", "success");
-        }
-      }
-    } catch(e){}
-    applyRoute(location.hash);
+  // 先恢复登录态, 已登录才加载主数据
+  restoreAuth().then(function(){
+    if (store.authenticated) {
+      bootAfterAuth();
+    }
   });
-  loadSummary(); loadMemories();
 })();

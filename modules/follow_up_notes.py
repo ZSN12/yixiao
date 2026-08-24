@@ -250,7 +250,7 @@ def reanalyze_with_note(
     # 新的核心诉求: 在最新诉求基础上, 用命中的需求话术模板补充
     new_core_demands = list(latest.get("core_demands", []) or [])
     new_follow_up = _build_updated_suggestion(
-        intention_after, churn_after, note_text, pos_hits, neg_hits, churn_hits
+        intention_after, churn_after, pos_hits, neg_hits, churn_hits
     )
 
     result = {
@@ -290,7 +290,6 @@ def reanalyze_with_note(
 def _build_updated_suggestion(
     intention_after: str,
     churn_after: str,
-    note_text: str,
     pos_hits: Dict[str, int],
     neg_hits: Dict[str, int],
     churn_hits: Dict[str, int],

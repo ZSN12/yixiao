@@ -69,7 +69,9 @@ python main.py
 python -m orchestrator.language_graph_flow
 ```
 
-mock 模式下(默认 `MOCK_MODE=True`): 画像分析走规则引擎、钉钉推送未配置时打印提示并跳过 —— 不花一分钱、开箱即跑。
+开箱即跑: 未配置任何 LLM Key 时画像分析/话术走规则引擎; 配置 `KIMI_API_KEY`
+(默认 `LLM_PROVIDER=kimi`)后画像分析、销售画像、话术生成均走 Kimi K2.7 Code;
+也可切 `LLM_PROVIDER=openai` 使用任意 OpenAI 兼容大模型(DeepSeek/通义等)。
 
 ## 目录结构
 
@@ -95,7 +97,9 @@ sales-agent/
 ## 面试亮点
 
 - **LangGraph 多智能体状态图**: 分析师 → 匹配师 → 推送员三个专职节点共享状态对象, 节点间只通过 state 流转, 可直接可视化、可单独 import 测试。
-- **零 langchain 依赖的模型调用**: 节点内直接用 openai SDK(settings.LLM_API_BASE/KEY/MODEL), 规避 openai 3.x 与 requirements 锁定 openai==1.51.0 的版本冲突。
+- **可插拔 LLM 网关(`modules/llm_client`)**: 业务模块只依赖 `chat` / `chat_json` /
+  `enabled` 三个接口, 底层按 `LLM_PROVIDER` 在 Kimi(Anthropic Messages) 与
+  OpenAI 兼容(Chat Completions)之间切换, 换大模型零业务改动。
 - **三级降级**: langgraph 不可用 → 顺序直调; LLM 失败 → 规则引擎; 单环节失败 → 记错误继续, 全流程不崩溃。
 - **钉钉加签正确实现**: HMAC-SHA256 + Base64 + URL 编码, 纯标准库, 见到"timestamp\nsecret"顺序的考点即得分。
 - **确定性可复现**: mock 模式全规则引擎, 意向分层(高/中/低)与流失分层完全确定, 便于验收与回归。
@@ -108,15 +112,19 @@ sales-agent/
 
 | 环境变量 | settings 字段 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `LLM_API_BASE` | `llm_api_base` | `https://api.deepseek.com/v1` | 大模型 OpenAI 兼容 Base URL(DeepSeek / 通义等) |
-| `LLM_API_KEY` | `llm_api_key` | `""` | 大模型 API Key; 为空 + `MOCK_MODE=True` 时画像分析走规则引擎 |
-| `LLM_MODEL` | `llm_model` | `deepseek-chat` | 模型名(如 `deepseek-chat` / `qwen-plus`) |
+| `LLM_PROVIDER` | `llm_provider` | `kimi` | 统一 LLM 网关后端: `kimi`(Anthropic Messages) / `openai`(OpenAI 兼容) |
+| `KIMI_API_BASE` | `kimi_api_base` | `https://api.kimi.com/coding` | Kimi Anthropic Messages 端点(实际请求追加 `/v1/messages`) |
+| `KIMI_API_KEY` | `kimi_api_key` | `""` | Kimi API Key; 配置后画像/销售画像/话术走 Kimi |
+| `KIMI_MODEL` | `kimi_model` | `kimi-for-coding` | Kimi 模型名 |
+| `LLM_API_BASE` | `llm_api_base` | `https://api.deepseek.com/v1` | OpenAI 兼容 Base URL(DeepSeek / 通义等; `LLM_PROVIDER=openai` 时生效) |
+| `LLM_API_KEY` | `llm_api_key` | `""` | OpenAI 兼容 API Key; 为空时对应后端走规则引擎 |
+| `LLM_MODEL` | `llm_model` | `deepseek-chat` | OpenAI 兼容模型名(如 `deepseek-chat` / `qwen-plus`) |
 | `LLM_TIMEOUT` | `llm_timeout` | `60.0` | 大模型调用超时(秒) |
 | `DINGTALK_WEBHOOK_URL` | `dingtalk_webhook_url` | `""` | 钉钉自定义机器人 Webhook; 未配置则打印提示并跳过推送 |
 | `DINGTALK_SECRET` | `dingtalk_secret` | `""` | 机器人加签密钥(SEC 开头, 可选) |
 | `DB_PATH` | `db_path` | `data/sales_agent.db` | SQLite 数据库路径(相对项目根) |
 | `DAILY_RUN_TIME` | `daily_run_time` | `08:30` | 每日定时运行时间(HH:MM) |
-| `MOCK_MODE` | `mock_mode` | `True` | `True` 时画像分析走规则引擎; `LLM_API_KEY` 为空时自动视为 mock |
+| `MOCK_MODE` | `mock_mode` | `True` | `True` 时飞书个人通知等主动推送静默跳过(测试/演示零外呼); 画像/话术是否走 LLM 取决于对应 key 是否配置 |
 | `EMBEDDING_API_BASE` | `embedding_api_base` | `""` | Embedding API 端点(可选; 配置了走向量检索) |
 | `EMBEDDING_API_KEY` | `embedding_api_key` | `""` | Embedding API Key |
 | `EMBEDDING_MODEL` | `embedding_model` | `""` | Embedding 模型名(如 `text-embedding-3-small`) |
@@ -131,11 +139,17 @@ cp config/.env.example config/.env
 
 `config/settings.py` 在 import 时自动加载 `config/.env`(utf-8 编码); 同名环境变量优先级更高, 可直接覆盖, 无需改代码。
 
-### Mock 模式与真实模式的切换
+### LLM 后端切换(Kimi / OpenAI 兼容)
 
-- **Mock 模式(默认, 开箱即跑)**: `MOCK_MODE=True`(或 `LLM_API_KEY` 为空)。画像分析走规则引擎(关键词打分), RAG 走零依赖本地字符 n-gram 相似度, 钉钉未配置时打印提示并跳过推送 —— 不花一分钱, 全部确定性可复现。
-- **真实模式**: 在 `config/.env` 中设 `MOCK_MODE=False` 并填入 `LLM_API_KEY`, 画像分析与分析师/匹配师节点即调用大模型(OpenAI 兼容接口, 强制 JSON 输出); 填入 `EMBEDDING_*` 后 RAG 走 API 向量检索; 填入 `DINGTALK_*` 后日报与分配明细推送到钉钉群。
-- **自动降级**: 任意 LLM / embedding 调用失败(网络 / 超时 / 格式异常)都会记日志并自动降级到规则引擎 / 本地相似度, 整条流水线不中断。
+- **Kimi(默认)**: `LLM_PROVIDER=kimi` 并配置 `KIMI_API_KEY`。画像分析、销售画像、
+  话术生成均走 Kimi K2.7 Code(Anthropic Messages 接口, 自动过滤 thinking 块)。
+- **OpenAI 兼容(预留)**: `LLM_PROVIDER=openai` 并配置 `LLM_API_KEY` /
+  `LLM_API_BASE` / `LLM_MODEL`。可接 OpenAI、DeepSeek、通义千问、Moonshot、
+  本地 vLLM 等一切 Chat Completions 兼容端点, 业务代码零改动。
+- **无 Key 兜底**: 当前 provider 未配置 key 时, 画像分析走规则引擎(关键词打分),
+  RAG 走零依赖本地字符 n-gram 相似度, 话术走规则模板 —— 开箱即跑、确定性可复现。
+- **自动降级**: 任意 LLM / embedding 调用失败(网络 / 超时 / 格式异常)都会记日志
+  并自动降级到规则引擎 / 本地相似度, 整条流水线不中断。
 
 ## API 一览
 

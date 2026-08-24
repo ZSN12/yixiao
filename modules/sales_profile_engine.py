@@ -21,7 +21,6 @@ import re
 from collections import Counter
 from typing import Any, Dict, List, Optional
 
-from config.settings import settings
 from modules import data_loader
 
 logger = logging.getLogger(__name__)
@@ -55,14 +54,15 @@ _SALES_PROFILE_SYSTEM_PROMPT = """你是一名资深销售效能与胜任力分�
 
 
 def _llm_enabled() -> bool:
-    """是否启用了真实 LLM(配置了 Kimi key, 独立于 mock_mode)。"""
-    return bool((getattr(settings, "kimi_api_key", "") or "").strip())
+    """是否启用了真实 LLM(当前 provider 已配置 key 即启用)。"""
+    from modules import llm_client
+    return llm_client.enabled()
 
 
 def _llm_chat(system: str, user: str) -> str:
-    """调 Kimi K2.7 Code(复用统一 kimi_client)。"""
-    from modules import kimi_client
-    return kimi_client.chat(system, user, max_tokens=2000, temperature=0.2)
+    """调用统一 LLM 网关(按 LLM_PROVIDER 分派 Kimi / OpenAI 兼容)。"""
+    from modules import llm_client
+    return llm_client.chat(system, user, max_tokens=2000, temperature=0.2)
 
 
 def _rule_based_profile(sales_id: str, deals: List[dict], sales_info: Optional[dict] = None) -> Dict[str, Any]:

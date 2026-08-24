@@ -196,13 +196,14 @@ def parse_sales_from_text(text: str) -> Optional[str]:
 
 
 # 同步状态持久化文件(独立于 mock_customers.json, 避免污染测试基线)
-SYNC_STATE_FILE = "data/bitable_sync_state.json"
+# 用项目根绝对路径定位, 不依赖当前工作目录(与 data_loader 路径约定一致)。
+from pathlib import Path as _Path
+SYNC_STATE_FILE = str(_Path(__file__).resolve().parent.parent / "data" / "bitable_sync_state.json")
 
 
 def _load_sync_state() -> Dict[str, Any]:
     """加载同步状态文件, 结构: {customer_name: {follow_up_status, owner_sales_id}}。"""
-    from pathlib import Path
-    p = Path(SYNC_STATE_FILE)
+    p = _Path(SYNC_STATE_FILE)
     if not p.exists():
         return {}
     try:
@@ -214,8 +215,7 @@ def _load_sync_state() -> Dict[str, Any]:
 
 def _save_sync_state(state: Dict[str, Any]) -> None:
     """持久化同步状态文件。"""
-    from pathlib import Path
-    p = Path(SYNC_STATE_FILE)
+    p = _Path(SYNC_STATE_FILE)
     p.parent.mkdir(parents=True, exist_ok=True)
     with open(p, "w", encoding="utf-8") as f:
         json.dump(state, f, ensure_ascii=False, indent=2)
@@ -239,7 +239,6 @@ def pull_from_bitable(dry_run: bool = False) -> Dict[str, Any]:
     from modules import data_loader
     local = data_loader.load_customers()
     local_by_name: Dict[str, Any] = {c.customer_name: c for c in local}
-    local_by_id: Dict[str, Any] = {c.customer_id: c for c in local}
 
     # 现有同步状态
     sync_state = _load_sync_state()

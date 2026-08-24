@@ -8,9 +8,9 @@
 双引擎设计(渐进降级, 与全项目一致):
 1. 规则引擎(mock/default): 不调 LLM, 基于聊天记录关键词打分确定性生成结果,
    全部可复现, 保证"没有 API Key 也能开箱即跑"。
-2. LLM 引擎(配置 llm_api_key 且 mock_mode=False 时): 调 OpenAI 兼容
-   Chat Completions 并强制 JSON 输出; 任何失败(网络/超时/格式/openai 未安装)
-   → 记日志 → 自动降级到规则引擎结果, 保证不中断。
+2. LLM 引擎(配置 kimi_api_key 时): 调 Kimi K2.7 Code(Anthropic Messages
+   接口)并约束 JSON 输出; 任何失败(网络/超时/格式/校验失败) → 记日志 →
+   自动降级到规则引擎结果, 保证不中断。
 
 关键词词典(任务规定"至少覆盖", 以下为覆盖全集; 均用于子串命中计数):
 - 意向加分:   预算/采购/合同/签约/报价/方案/立项/尽快/时间/需求
@@ -36,7 +36,6 @@ from typing import Dict, List
 from pydantic import BaseModel
 from typing_extensions import Literal
 
-from config.settings import settings
 from modules.data_loader import ChatRecord, Customer
 
 logger = logging.getLogger(__name__)
@@ -392,8 +391,12 @@ def _fallback_to_rules(customer: Customer, chat_records: List[ChatRecord]) -> An
 
 
 def _llm_enabled() -> bool:
-    """判断是否启用 LLM 引擎: 配置了 Kimi key(独立于 mock_mode)。"""
-    return bool(settings.kimi_api_key)
+    """判断是否启用 LLM 引擎: 当前 provider 已配置 key 即启用。
+
+    未配置 key 时自动降级规则引擎(零依赖、可复现, 开箱即跑)。
+    """
+    from modules import llm_client
+    return llm_client.enabled()
 
 
 def _analyze_with_llm(customer: Customer, chat_records: List[ChatRecord]) -> AnalysisResult:
@@ -409,14 +412,14 @@ def _analyze_with_llm(customer: Customer, chat_records: List[ChatRecord]) -> Ana
     Raises:
         Exception: 网络/超时/格式/校验失败 —— 由调用方(降级逻辑)兜底。
     """
-    from modules import kimi_client
+    from modules import llm_client
 
     # user 消息 = 客户基础信息 JSON + 聊天记录 JSON
     payload = {
         "客户基础信息": customer.model_dump(),
         "聊天记录": [record.model_dump() for record in chat_records],
     }
-    data = kimi_client.chat_json(
+    data = llm_client.chat_json(
         SYSTEM_PROMPT,
         json.dumps(payload, ensure_ascii=False),
         max_tokens=2000,
