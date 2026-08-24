@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import json
 import logging
-import secrets
 import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -98,7 +97,7 @@ class DataSource(Base):
 
 
 def _now() -> str:
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    return datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
 
 
 def ensure_seed_sources() -> None:

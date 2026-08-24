@@ -23,7 +23,7 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 
 from modules import data_loader
-from modules.data_loader import Base, Mapped, String, Text, mapped_column
+from modules.data_loader import Base, Mapped, String, mapped_column
 
 logger = logging.getLogger(__name__)
 

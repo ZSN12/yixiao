@@ -33,12 +33,13 @@ import json
 import logging
 import sys
 from pathlib import Path
+from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 # 项目根目录(本文件位于 <项目根>/api.py)加入 sys.path, 保证任何 cwd 下可运行
 PROJECT_ROOT: Path = Path(__file__).resolve().parent
@@ -58,23 +59,13 @@ from orchestrator import language_graph_flow as lgf  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="销售线索智能分析与分发助手 API", version="1.0.0")
 
-# CORS: 允许本地前端调试
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    """应用启动时确保种子数据就绪(超级管理员 + 预置数据源)。
 
-
-@app.on_event("startup")
-def _startup_seed_admin() -> None:
-    """应用启动时确保超级管理员种子账号存在(admin/123456)。
-
-    注: 用 on_event 而非 lifespan, 兼容当前 FastAPI 0.115 及旧版(避免
-    lifespan 上下文在 TestClient 下额外接线)。"""
+    使用 FastAPI lifespan 事件(替代已废弃的 on_event)。
+    """
     try:
         user_auth.ensure_seed_admin()
     except Exception as exc:  # noqa: BLE001
@@ -83,6 +74,18 @@ def _startup_seed_admin() -> None:
         data_source_registry.ensure_seed_sources()
     except Exception as exc:  # noqa: BLE001
         logger.warning("启动时写入预置数据源失败: %s", exc)
+    yield
+
+
+app = FastAPI(title="销售线索智能分析与分发助手 API", version="1.0.0", lifespan=_lifespan)
+
+# CORS: 允许本地前端调试
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # ============================================================
@@ -109,8 +112,8 @@ class SalesCreateRequest(BaseModel):
 
     sales_id: str
     name: str
-    good_at_industries: List[str] = []
-    responsible_cities: List[str] = []
+    good_at_industries: List[str] = Field(default_factory=list)
+    responsible_cities: List[str] = Field(default_factory=list)
     current_load: int = 0
     mobile: str = ""
     open_id: str = ""
@@ -128,7 +131,7 @@ class DataSourceCreateRequest(BaseModel):
 
     name: str
     type: str
-    config: Dict[str, Any] = {}
+    config: Dict[str, Any] = Field(default_factory=dict)
     enabled: bool = True
 
 

@@ -44,6 +44,8 @@ class Settings(BaseSettings):
     # 销售人员 ID -> 飞书绑定手机号映射 (用于一对一定向推送工作通知);
     # 含个人手机号, 属敏感信息, 请在 config/.env 配置。
     sales_mobile_map: str = ""
+    # HTTPS 证书校验: False 时兼容内网代理/自签名证书环境(默认), 生产环境建议设 True
+    verify_ssl: bool = False
     # 数据库
     db_path: str = "data/sales_agent.db"
     # 调度

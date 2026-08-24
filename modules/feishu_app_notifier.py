@@ -35,10 +35,11 @@ _user_id_cache: Dict[str, str] = {}
 
 
 def _get_ssl_context() -> ssl.SSLContext:
-    """生成宽松 SSL 上下文, 兼容各类内网代理与自签名证书环境。"""
+    """生成 SSL 上下文: settings.verify_ssl=False 时宽松, 兼容内网代理/自签名证书环境。"""
     ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
+    if not getattr(settings, "verify_ssl", False):
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
     return ctx
 
 

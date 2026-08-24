@@ -8,8 +8,8 @@
     → rag_retriever.retrieve_top_sales(消费者直接检索, 见模块末尾"检索消费"说明)。
 
 双引擎提炼(渐进降级, 对齐 profile_analyzer 先例):
-1. LLM 引擎(配置 llm_api_key 且 mock_mode=False): 每笔商机打包 Prompt,
-   强制 response_format={"type":"json_object"}, 抽取「痛点/打法/结果」三要素
+1. LLM 引擎(统一 llm_client 网关, 按 LLM_PROVIDER 分派 Kimi / OpenAI 兼容):
+   每笔商机打包 Prompt 约束 JSON 输出, 抽取「痛点/打法/结果」三要素
    产出自然语言 content(含 企业规模/预算/决策角色/痛点/过程/结果, 与现有
    mock_sales_experience.json 语料风格一致)。
 2. 规则模板引擎(默认/mock/LLM 不可用·超时·格式错时自动降级): 确定性模板拼装 content。
@@ -226,7 +226,7 @@ def _refine_with_llm(deal: dict) -> str:
         str: 提炼出的经验片段 content。
 
     Raises:
-        Exception: 网络/超时/格式/openai 未安装/校验失败 —— 由调用方降级到规则模板。
+        Exception: 网络/超时/格式/LLM 未安装/校验失败 —— 由调用方降级到规则模板。
     """
     from modules import llm_client
 

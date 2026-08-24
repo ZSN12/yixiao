@@ -34,13 +34,14 @@ def kimi_enabled() -> bool:
 
 
 def _ssl_context() -> ssl.SSLContext:
-    """宽松 SSL 上下文(兼容本地代理/证书环境)。"""
+    """SSL 上下文: settings.verify_ssl=False 时宽松(兼容内网代理/自签名证书)。"""
     ctx = ssl.create_default_context()
-    try:
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-    except Exception:  # noqa: BLE001
-        pass
+    if not getattr(settings, "verify_ssl", False):
+        try:
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+        except Exception:  # noqa: BLE001
+            pass
     return ctx
 
 
