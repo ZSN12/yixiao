@@ -1,0 +1,92 @@
+[
+  {
+    "customer_id": "C001",
+    "customer_name": "苏州博创智能装备有限公司",
+    "industry": "智能制造",
+    "city": "苏州",
+    "scale": "中大型",
+    "owner_sales_id": null,
+    "follow_up_status": "待跟进",
+    "create_time": "2024-03-12"
+  },
+  {
+    "customer_id": "C002",
+    "customer_name": "杭州康泰医疗器械股份有限公司",
+    "industry": "医疗器械",
+    "city": "杭州",
+    "scale": "大型",
+    "owner_sales_id": "S001",
+    "follow_up_status": "已接单跟进",
+    "create_time": "2024-04-05"
+  },
+  {
+    "customer_id": "C003",
+    "customer_name": "深圳云启软件科技有限公司",
+    "industry": "软件服务",
+    "city": "深圳",
+    "scale": "中型",
+    "owner_sales_id": null,
+    "follow_up_status": "待跟进",
+    "create_time": "2024-05-18"
+  },
+  {
+    "customer_id": "C004",
+    "customer_name": "成都蜀通货运有限公司",
+    "industry": "物流",
+    "city": "成都",
+    "scale": "中型",
+    "owner_sales_id": "S003",
+    "follow_up_status": "已接单跟进",
+    "create_time": "2024-06-02"
+  },
+  {
+    "customer_id": "C005",
+    "customer_name": "广州南方新能源科技有限公司",
+    "industry": "新能源",
+    "city": "广州",
+    "scale": "大型",
+    "owner_sales_id": null,
+    "follow_up_status": "待跟进",
+    "create_time": "2024-06-27"
+  },
+  {
+    "customer_id": "C006",
+    "customer_name": "上海瑞金精密仪器有限公司",
+    "industry": "智能制造",
+    "city": "上海",
+    "scale": "中型",
+    "owner_sales_id": "S002",
+    "follow_up_status": "已接单跟进",
+    "create_time": "2024-07-11"
+  },
+  {
+    "customer_id": "C007",
+    "customer_name": "南京恒宇生物制药有限公司",
+    "industry": "医药制造",
+    "city": "南京",
+    "scale": "大型",
+    "owner_sales_id": null,
+    "follow_up_status": "待跟进",
+    "create_time": "2024-08-08"
+  },
+  {
+    "customer_id": "C008",
+    "customer_name": "北京华信数据服务有限公司",
+    "industry": "软件服务",
+    "city": "北京",
+    "scale": "中型",
+    "owner_sales_id": "S001",
+    "follow_up_status": "已接单跟进",
+    "create_time": "2024-09-01"
+  },
+  {
+    "customer_id": "C009",
+    "customer_name": "武汉锦程重工设备有限公司",
+    "industry": "智能制造",
+    "city": "武汉",
+    "scale": "大型",
+    "owner_sales_id": null,
+    "follow_up_status": "待跟进",
+    "create_time": "2024-09-15"
+  }
+]

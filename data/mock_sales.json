@@ -1,0 +1,76 @@
+[
+  {
+    "sales_id": "S001",
+    "name": "张伟",
+    "good_at_industries": [
+      "新能源",
+      "医疗器械",
+      "智能制造"
+    ],
+    "responsible_cities": [
+      "苏州",
+      "杭州",
+      "南京"
+    ],
+    "current_load": 2,
+    "mobile": "15990070647",
+    "open_id": "ou_5a3f22e10391fa12d541c1c033f29dd5"
+  },
+  {
+    "sales_id": "S002",
+    "name": "李娜",
+    "good_at_industries": [
+      "软件服务",
+      "新能源"
+    ],
+    "responsible_cities": [
+      "深圳",
+      "上海",
+      "广州"
+    ],
+    "current_load": 0,
+    "mobile": "15990070647",
+    "open_id": ""
+  },
+  {
+    "sales_id": "S003",
+    "name": "王强",
+    "good_at_industries": [
+      "物流",
+      "智能制造"
+    ],
+    "responsible_cities": [
+      "成都",
+      "上海",
+      "苏州"
+    ],
+    "current_load": 5,
+    "mobile": "15990070647",
+    "open_id": ""
+  },
+  {
+    "sales_id": "S004",
+    "name": "赵敏",
+    "good_at_industries": [
+      "医药制造",
+      "软件服务"
+    ],
+    "responsible_cities": [
+      "北京",
+      "杭州",
+      "南京"
+    ],
+    "current_load": 1,
+    "mobile": "15990070647",
+    "open_id": ""
+  },
+  {
+    "sales_id": "admin",
+    "name": "默认管理员",
+    "good_at_industries": [],
+    "responsible_cities": [],
+    "current_load": 0,
+    "mobile": "",
+    "open_id": ""
+  }
+]

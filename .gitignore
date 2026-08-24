@@ -1,0 +1,22 @@
+# 环境变量(含密钥), 禁止入库
+.env
+
+# Python 缓存
+__pycache__/
+*.pyc
+
+# 本地数据库
+data/*.db
+
+# 虚拟环境
+.venv/
+
+# macOS 系统文件
+.DS_Store
+
+# 二进制工具(cloudflared 等, 不入库)
+bin/
+
+# 运行时同步状态层(动态演示数据, 不入库)
+data/bitable_sync_state.json
+data/sla_state.json
