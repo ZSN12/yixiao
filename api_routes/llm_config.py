@@ -162,12 +162,15 @@ def test_llm_config(body: LLMConfigTestRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail="未提供有效的 API Key")
 
     try:
+        import httpx
         from openai import OpenAI
 
+        # 兼容 httpx 0.28+ 废弃 proxies 参数导致的 openai-python 1.51 初始化报错
+        http_client = httpx.Client(timeout=30.0)
         client = OpenAI(
             api_key=key_to_use.strip(),
             base_url=base_to_use.strip(),
-            timeout=30.0,
+            http_client=http_client,
         )
         resp = client.chat.completions.create(
             model=model_to_use.strip(),

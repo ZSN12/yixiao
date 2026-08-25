@@ -151,11 +151,13 @@ def _api_embed_texts(texts: List[str]) -> Optional[List[List[float]]]:
         return None
     try:
         # 延迟导入: openai 是可选依赖, 未安装时走本地兜底
+        import httpx
         from openai import OpenAI
+        http_client = httpx.Client(timeout=settings.llm_timeout)
         client = OpenAI(
             api_key=settings.embedding_api_key,
             base_url=settings.embedding_api_base,
-            timeout=settings.llm_timeout,
+            http_client=http_client,
         )
         resp = client.embeddings.create(
             model=settings.embedding_model,

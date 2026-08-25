@@ -96,6 +96,7 @@ def _chat_openai(
     json_mode=True 时请求 response_format={"type": "json_object"}。
     优先用界面激活的模型配置(api_key/base/model), 否则回退 settings 静态配置。
     """
+    import httpx
     from openai import OpenAI  # 延迟导入: openai 为可选依赖
 
     cfg = _active_store_config()
@@ -108,10 +109,12 @@ def _chat_openai(
         api_base = settings.llm_api_base
         model = settings.llm_model
 
+    # 兼容 httpx 0.28+ 废弃 proxies 参数导致的 openai SDK 初始化异常
+    http_client = httpx.Client(timeout=settings.llm_timeout)
     client = OpenAI(
         api_key=api_key,
         base_url=api_base,
-        timeout=settings.llm_timeout,
+        http_client=http_client,
     )
     messages: list = []
     if system:
