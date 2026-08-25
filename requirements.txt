@@ -4,6 +4,7 @@ APScheduler==3.10.4
 SQLAlchemy==2.0.35
 openai==1.51.0
 requests==2.32.3
+typing_extensions>=4.12
 pydantic==2.9.2
 pydantic-settings==2.5.2
 python-dotenv==1.0.1

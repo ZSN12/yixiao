@@ -1,11 +1,20 @@
 # -*- coding: utf-8 -*-
 """本模块是全项目配置中心:所有业务模块(数据层/画像分析/线索分配/钉钉推送/飞书推送/调度编排)统一从这里读取配置。"""
 
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# .env 固定相对本文件所在目录解析, 避免 cwd 不同导致密钥静默不生效。
+_CONFIG_DIR: Path = Path(__file__).resolve().parent
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file="config/.env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=str(_CONFIG_DIR / ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
     # 统一 LLM 网关(llm_client)的 provider 选择: "kimi" | "openai"
     # - kimi:   Anthropic Messages 接口(api.kimi.com/coding 等), 当前默认;
     # - openai: OpenAI 兼容 Chat Completions(OpenAI/DeepSeek/通义/vLLM 等), 预留。

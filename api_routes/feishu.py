@@ -51,18 +51,19 @@ async def feishu_card_action(request: Request) -> Dict[str, Any]:
             # 用回调的 operator_open_id 反查当前销售 ID, 写为客户的真正归属
             operator_sales = _find_sales_by_open_id(operator_open_id) or {}
             owner_sid = operator_sales.get("sales_id") or ""
-            # 将客户归属写入/更新
+            # 将客户归属写入/更新(读-改-写整体加锁, 防并发回调互相覆盖)
             try:
-                customers = data_loader.load_customers()
-                matched_cust = next((c for c in customers if c.customer_id == customer_id), None)
-                if matched_cust:
-                    # 归属写入实际销售 ID(优先按 open_id 反查; 查不到则保留原归属,
-                    # 但不再写入状态文本, 避免污染 owner_sales_id)
-                    if owner_sid:
-                        matched_cust.owner_sales_id = owner_sid
-                    elif matched_cust.owner_sales_id in ("已接单", "待改派"):
-                        matched_cust.owner_sales_id = None
-                    data_loader.save_customers(customers)
+                with data_loader.customers_write_lock():
+                    customers = data_loader.load_customers()
+                    matched_cust = next((c for c in customers if c.customer_id == customer_id), None)
+                    if matched_cust:
+                        # 归属写入实际销售 ID(优先按 open_id 反查; 查不到则保留原归属,
+                        # 但不再写入状态文本, 避免污染 owner_sales_id)
+                        if owner_sid:
+                            matched_cust.owner_sales_id = owner_sid
+                        elif matched_cust.owner_sales_id in ("已接单", "待改派"):
+                            matched_cust.owner_sales_id = None
+                        data_loader.save_customers(customers)
             except Exception as e:
                 logger.warning("更新客户接单状态异常: %s", e)
 
@@ -91,11 +92,12 @@ async def feishu_card_action(request: Request) -> Dict[str, Any]:
             logger.info("收到改派申请: customer=%s reason=%s operator=%s", customer_id, reason, operator_open_id)
             # 标记客户为待改派: 清除归属(待主管复核后重新分配), 不写入状态文本
             try:
-                customers = data_loader.load_customers()
-                matched_cust = next((c for c in customers if c.customer_id == customer_id), None)
-                if matched_cust:
-                    matched_cust.owner_sales_id = None
-                    data_loader.save_customers(customers)
+                with data_loader.customers_write_lock():
+                    customers = data_loader.load_customers()
+                    matched_cust = next((c for c in customers if c.customer_id == customer_id), None)
+                    if matched_cust:
+                        matched_cust.owner_sales_id = None
+                        data_loader.save_customers(customers)
             except Exception as e:
                 logger.warning("更新客户改派状态异常: %s", e)
 

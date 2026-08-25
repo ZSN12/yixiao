@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 import logging
 import sys
+import uuid
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -89,8 +90,10 @@ def load_chat_from_call(manifest: Dict) -> Tuple[ChatRecord, RoleResolution]:
 
     # 4. 组装 ChatRecord
     chat_time = str(manifest.get("call_time") or "")
+    # call_id 缺失时用 uuid 兜底, 避免 hash() 对 dict/list 值不可哈希,
+    # 且保证多次运行/多进程之间生成的 ID 稳定唯一。
     record = ChatRecord(
-        record_id=call_id or f"CALL{hash(tuple(sorted(manifest.items()))) % 1000:03d}",
+        record_id=call_id or f"CALL-{uuid.uuid4().hex[:8]}",
         customer_id=str(manifest.get("customer_id") or ""),
         sales_id=(str(manifest.get("sales_id") or "").strip()) or None,
         chat_time=chat_time[:10],  # 与 mock 对齐 YYYY-MM-DD

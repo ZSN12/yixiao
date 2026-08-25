@@ -46,6 +46,7 @@ _INDUSTRY_PAIN_HOOK: Dict[str, str] = {
 def _latest_profile(customer_id: str) -> Dict[str, Any]:
     """读取客户最新画像结果 + 最新跟进小记。"""
     profile: Dict[str, Any] = {}
+    session = None
     try:
         data_loader.init_db()
         session = data_loader._get_session()
@@ -58,7 +59,6 @@ def _latest_profile(customer_id: str) -> Dict[str, Any]:
                 .limit(1)
                 .all()
             )
-            session.close()
             if rows:
                 try:
                     profile = json.loads(rows[0].result_json)
@@ -66,6 +66,9 @@ def _latest_profile(customer_id: str) -> Dict[str, Any]:
                     profile = {}
     except Exception as exc:  # noqa: BLE001
         logger.warning("读取画像失败(%s): %s", customer_id, exc)
+    finally:
+        if session is not None:
+            session.close()
 
     # 追加最新跟进小记(若有)
     try:

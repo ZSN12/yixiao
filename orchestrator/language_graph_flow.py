@@ -30,6 +30,7 @@ from __future__ import annotations
 import copy
 import json
 import logging
+import threading
 from collections import Counter
 from typing import Any, Dict, List, TypedDict
 
@@ -41,6 +42,11 @@ from modules import notify
 from modules import profile_analyzer
 
 logger = logging.getLogger(__name__)
+
+# 推送互斥锁: 定时任务与手动触发/并发请求同时跑流水线时,
+# 串行化发送环节, 避免重复推送、并发网络请求导致限流或资源争用。
+# 用普通 Lock 而非 RLock: _report_push_node 是叶子节点, 不会重入。
+_push_lock = threading.Lock()
 
 # ============================================================
 # LangGraph 可选依赖(宽松导入, 失败降级顺序执行)
@@ -362,19 +368,22 @@ def _report_push_node(state: dict) -> dict:
                 "needs_human": human_text,
             },
         )
-        # 日报/分配明细走 notify 统一入口(按 settings.notifier_channel 选择通道)
-        ok_daily = notify.send_daily_report(
-            report_text, title=_PUSH_REPORT_TITLE_DAILY
-        )
-        ok_batch = False
-        personal_sent = 0
-        if assignments:
-            ok_batch = notify.send_assignment_batch(assignments)
-            # 飞书企业自建应用: 给对应销售发送个人工作通知卡片
-            try:
-                personal_sent = notify.send_personal_assignments(assignments, analysis_results=analysis_results)
-            except Exception as e:
-                logger.warning("发送飞书个人工作通知异常: %s", e)
+        # 发送环节整体串行化: 防止定时任务 + 手动触发并发时重复推送同一批日报,
+        # 也避免飞书/钉钉接口被并发请求打爆触发限流。
+        with _push_lock:
+            # 日报/分配明细走 notify 统一入口(按 settings.notifier_channel 选择通道)
+            ok_daily = notify.send_daily_report(
+                report_text, title=_PUSH_REPORT_TITLE_DAILY
+            )
+            ok_batch = False
+            personal_sent = 0
+            if assignments:
+                ok_batch = notify.send_assignment_batch(assignments)
+                # 飞书企业自建应用: 给对应销售发送个人工作通知卡片
+                try:
+                    personal_sent = notify.send_personal_assignments(assignments, analysis_results=analysis_results)
+                except Exception as e:
+                    logger.warning("发送飞书个人工作通知异常: %s", e)
 
         report = {
             "daily_report": ok_daily,
@@ -551,6 +560,10 @@ def run_pipeline_sequential(
     push_partial = _report_push_node(state)
     state["push_reports"] = push_partial["push_reports"]
     state["meta"]["pusher_status"] = push_partial.get("meta", {}).get("pusher_status")
+    # 顺序模式不经过 LangGraph 的通道合并, 这里手动把推送错误并入总 errors,
+    # 保证最终 summary.errors 能体现推送环节的失败。
+    if push_partial.get("errors"):
+        state["errors"].extend(push_partial["errors"])
     # 4. 汇总
     state["summary"] = _summarize_node(state)["summary"]
     state["meta"]["engine"] = "sequential-fallback"

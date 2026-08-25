@@ -193,11 +193,17 @@ def analyze_sales_profile(sales_id: str, auto_sync_to_model: bool = True) -> Dic
         profile_result = _rule_based_profile(sales_id, deals, sales_dict)
 
     # 4. 自动反哺同步回 Sales 模型 (更新擅长行业与能力标签)
-    if auto_sync_to_model and sales_obj and profile_result.get("recommended_industries"):
+    # 只在写回临界区内重新读取最新数据, 避免长时间持锁(LLM 分析在锁外完成)。
+    if auto_sync_to_model and profile_result.get("recommended_industries"):
         try:
             new_industries = profile_result["recommended_industries"]
-            sales_obj.good_at_industries = new_industries
-            data_loader.save_sales(sales_list)
+            with data_loader.sales_write_lock():
+                latest_sales = data_loader.load_sales()
+                latest_obj = next((s for s in latest_sales if s.sales_id == sales_id), None)
+                if latest_obj is None:
+                    raise ValueError(f"未找到工号为 {sales_id} 的销售人员")
+                latest_obj.good_at_industries = list(new_industries)
+                data_loader.save_sales(latest_sales)
             logger.info("已自动反哺销售 %s 的擅长行业为: %s", sales_id, new_industries)
         except Exception as exc:
             logger.warning("反哺销售模型失败: %s", exc)

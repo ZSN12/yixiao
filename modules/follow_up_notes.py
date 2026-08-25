@@ -106,6 +106,7 @@ def save_note(
 
 def list_notes(customer_id: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
     """查询跟进小记列表(可按客户过滤, 按时间倒序)。"""
+    session = None
     try:
         data_loader.init_db()
         session = data_loader._get_session()
@@ -129,11 +130,13 @@ def list_notes(customer_id: Optional[str] = None, limit: int = 50) -> List[Dict[
             }
             for r in rows
         ]
-        session.close()
         return result
     except Exception as exc:  # noqa: BLE001
         logger.error("查询跟进小记失败: %s", exc)
         return []
+    finally:
+        if session is not None:
+            session.close()
 
 
 # ============================================================
@@ -147,6 +150,7 @@ def _count_keywords(text: str, keywords: List[str]) -> Dict[str, int]:
 
 def _latest_analysis(customer_id: str) -> Dict[str, Any]:
     """读取该客户最新一条画像分析结果(意向/流失/诉求/建议)。"""
+    session = None
     try:
         data_loader.init_db()
         session = data_loader._get_session()
@@ -159,7 +163,6 @@ def _latest_analysis(customer_id: str) -> Dict[str, Any]:
             .limit(1)
             .all()
         )
-        session.close()
         if not rows:
             return {}
         try:
@@ -169,6 +172,9 @@ def _latest_analysis(customer_id: str) -> Dict[str, Any]:
     except Exception as exc:  # noqa: BLE001
         logger.error("读取最新画像失败(%s): %s", customer_id, exc)
         return {}
+    finally:
+        if session is not None:
+            session.close()
 
 
 def reanalyze_with_note(

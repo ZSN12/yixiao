@@ -69,12 +69,35 @@ def _now() -> datetime:
 
 
 def _parse_ts(ts: str) -> Optional[datetime]:
-    """解析 ISO 时间字符串, 失败返回 None。"""
+    """解析 ISO 时间字符串, 失败返回 None。
+
+    兼容带时区偏移(如 +08:00 / Z)与任意位数微秒的输入; 外部同步/回调写入的
+    时间格式不固定, 这里做宽泛解析, 解析不出时由调用方按 0 处理。
+    """
     if not ts:
         return None
-    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+    text = ts.strip()
+    # 统一替换空格分隔与 Z 时区标记
+    if " " in text and "T" not in text:
+        text = text.replace(" ", "T", 1)
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    # 去掉超过 6 位的微秒(时间库只支持 6 位)
+    if "." in text:
+        base, frac = text.split(".", 1)
+        digits = ""
+        for ch in frac:
+            if ch.isdigit():
+                digits += ch
+            else:
+                break
+        tail = frac[len(digits):]
+        text = f"{base}.{digits[:6]}{tail}"
+
+    for fmt in ("%Y-%m-%dT%H:%M:%S.%f%z", "%Y-%m-%dT%H:%M:%S%z",
+                "%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"):
         try:
-            return datetime.strptime(ts[:26], fmt)
+            return datetime.strptime(text, fmt)
         except ValueError:
             continue
     return None
@@ -96,14 +119,24 @@ def _last_follow_up_at(customer_id: str) -> Optional[str]:
 
 
 def _effective_owner(customer: Any) -> Optional[str]:
-    """取客户「有效归属销售」(合并飞书同步状态后的 owner_sales_id)。"""
+    """取客户「有效归属销售」(合并飞书同步状态后的 owner_sales_id)。
+
+    兼容多种销售 ID 格式(S001 / admin / 企客宝 user_id 等): 只排除历史遗留的
+    占位文本状态, 不做 S 前缀等格式猜测, 避免接入新数据源后 SLA 静默失效。
+    """
     # customer 可能是 Customer 对象或 dict
     if hasattr(customer, "owner_sales_id"):
         owner = customer.owner_sales_id
     else:
         owner = customer.get("owner_sales_id")
-    # 过滤掉占位文本状态(如"已接单"/"待改派"), 只认真实销售 ID(Sxxx)
-    if owner and not (owner.startswith("S") and len(owner) >= 3):
+    if not owner:
+        return None
+    owner = str(owner).strip()
+    # 历史代码可能把「跟进状态」误写入 owner_sales_id 字段, 这些不是真实销售 ID。
+    status_placeholders = (
+        "已接单", "待改派", "待跟进", "已电话沟通", "已成单", "已转交",
+    )
+    if owner in status_placeholders or owner in ("", "None", "null"):
         return None
     return owner
 
@@ -155,9 +188,12 @@ def check_sla(
         cid = c.customer_id if hasattr(c, "customer_id") else c["customer_id"]
         cname = c.customer_name if hasattr(c, "customer_name") else c["customer_name"]
 
-        entry = sla_state.setdefault(cid, {})
+        # 只读检测(apply_changes=False)不应修改状态层:
+        # 用 get 而非 setdefault, 后续所有写操作统一用 apply_changes 门控。
+        entry = sla_state.get(cid, {})
         # 记录归属时间(首次见到该 owner 时)
-        if entry.get("assigned_at") is None or entry.get("owner") != owner:
+        if apply_changes and (entry.get("assigned_at") is None or entry.get("owner") != owner):
+            entry = sla_state.setdefault(cid, {})
             entry["assigned_at"] = now.strftime("%Y-%m-%dT%H:%M:%S")
             entry["owner"] = owner
             changed = True
@@ -166,7 +202,8 @@ def check_sla(
         last_follow = _last_follow_up_at(cid)
 
         # 记录最后跟进时间(若有)
-        if last_follow and last_follow != entry.get("last_follow_up_at"):
+        if apply_changes and last_follow and last_follow != entry.get("last_follow_up_at"):
+            entry = sla_state.setdefault(cid, {})
             entry["last_follow_up_at"] = last_follow
             changed = True
         last_follow = entry.get("last_follow_up_at") or last_follow
@@ -179,12 +216,14 @@ def check_sla(
 
         if not has_followed and elapsed_hours > overdue_hours:
             sla_status = "overdue"
-            entry["sla_status"] = "overdue"
-            # 超时流转公海: 在 sla_state 里标记 override_owner=None(释放归属)
-            entry["override_owner"] = None
-            entry["released_at"] = now.strftime("%Y-%m-%dT%H:%M:%S")
-            entry["release_reason"] = f"SLA 超时: 接单 {overdue_hours}h 内未跟进, 自动流转公海"
-            changed = True
+            if apply_changes:
+                entry = sla_state.setdefault(cid, {})
+                entry["sla_status"] = "overdue"
+                # 超时流转公海: 在 sla_state 里标记 override_owner=None(释放归属)
+                entry["override_owner"] = None
+                entry["released_at"] = now.strftime("%Y-%m-%dT%H:%M:%S")
+                entry["release_reason"] = f"SLA 超时: 接单 {overdue_hours}h 内未跟进, 自动流转公海"
+                changed = True
             overdue_list.append({
                 "customer_id": cid,
                 "customer_name": cname,
@@ -196,9 +235,11 @@ def check_sla(
             })
         elif not has_followed and elapsed_hours > warning_hours:
             sla_status = "warning"
-            entry["sla_status"] = "warning"
-            entry.pop("override_owner", None)  # 预警阶段不释放
-            changed = True
+            if apply_changes:
+                entry = sla_state.setdefault(cid, {})
+                entry["sla_status"] = "warning"
+                entry.pop("override_owner", None)  # 预警阶段不释放
+                changed = True
             warning_list.append({
                 "customer_id": cid,
                 "customer_name": cname,
@@ -210,11 +251,13 @@ def check_sla(
             })
         else:
             sla_status = "ok"
-            entry["sla_status"] = "ok"
-            entry.pop("override_owner", None)
-            if entry.get("last_follow_up_at") != last_follow:
-                entry["last_follow_up_at"] = last_follow
-                changed = True
+            if apply_changes:
+                entry = sla_state.setdefault(cid, {})
+                entry["sla_status"] = "ok"
+                entry.pop("override_owner", None)
+                if entry.get("last_follow_up_at") != last_follow:
+                    entry["last_follow_up_at"] = last_follow
+                    changed = True
             ok_list.append({
                 "customer_id": cid,
                 "customer_name": cname,

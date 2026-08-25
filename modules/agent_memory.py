@@ -99,7 +99,9 @@ def _connect() -> Optional[sqlite3.Connection]:
     try:
         db_file = _resolve_db_path()
         db_file.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(str(db_file))
+        # timeout=30: 多线程并发写同一 SQLite 文件时等待写锁, 避免立即
+        # 抛 "database is locked" 或形成等待死锁。
+        conn = sqlite3.connect(str(db_file), timeout=30)
         conn.row_factory = sqlite3.Row
         return conn
     except Exception as exc:  # noqa: BLE001 —— 数据库不可用不允许让上层崩溃

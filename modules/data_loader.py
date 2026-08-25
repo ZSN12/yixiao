@@ -15,8 +15,10 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Iterator, List, Optional, Tuple
 
 from pydantic import BaseModel
 from sqlalchemy import create_engine, String, Text
@@ -34,6 +36,25 @@ SALES_FILE: Path = DATA_DIR / "mock_sales.json"
 EXPERIENCE_FILE: Path = DATA_DIR / "mock_sales_experience.json"
 
 logger = logging.getLogger(__name__)
+
+# ---- 进程内文件写锁: 防止 FastAPI/调度器多线程并发读-改-写互相覆盖 ----
+# 使用可重入锁 RLock, 同一线程在写锁内再次调用 save_* 不会自锁(死锁)。
+_customers_lock = threading.RLock()
+_sales_lock = threading.RLock()
+
+
+@contextmanager
+def customers_write_lock() -> Iterator[None]:
+    """客户 JSON 的读-改-写临界区锁(供 feishu 回调等外部调用方使用)。"""
+    with _customers_lock:
+        yield
+
+
+@contextmanager
+def sales_write_lock() -> Iterator[None]:
+    """销售 JSON 的读-改-写临界区锁(供销售画像反哺等外部调用方使用)。"""
+    with _sales_lock:
+        yield
 
 
 # ============================================================
@@ -183,7 +204,13 @@ def init_db(db_path: Optional[str] = None) -> None:
         _engine = create_engine(
             f"sqlite:///{db_file}",
             echo=False,
-            connect_args={"check_same_thread": False},   # 允许跨线程使用(FastAPI/调度场景)
+            connect_args={
+                "check_same_thread": False,   # 允许跨线程使用(FastAPI/调度场景)
+                # 多线程并发写同一 SQLite 文件时, 等待最多 30 秒拿写锁,
+                # 避免并发写入立即抛 "database is locked" 或形成等待死锁。
+                "timeout": 30,
+            },
+            pool_pre_ping=True,               # 复用连接前先探活, 避免拿到失效连接
         )
         _engine_db_file = str(db_file)
         _SessionLocal = sessionmaker(bind=_engine, autoflush=False, expire_on_commit=False)
@@ -355,12 +382,39 @@ def load_customers() -> List[Customer]:
     return _load_models(CUSTOMERS_FILE, Customer, "客户")
 
 
+def _atomic_write_json(file_path: Path, data: List[dict]) -> None:
+    """原子写入 JSON: 先写同目录临时文件, 再 os.replace 原子替换。
+
+    避免写一半进程崩溃/断电导致 JSON 文件损坏(数据基线文件被写坏后
+    整个流水线无法启动)。
+    """
+    import os
+    import tempfile
+
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(
+        prefix=file_path.name + ".",
+        suffix=".tmp",
+        dir=str(file_path.parent),
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(data, fh, ensure_ascii=False, indent=2)
+        os.replace(tmp_name, file_path)
+    except Exception:
+        # 失败时清理临时文件, 不留下垃圾
+        try:
+            os.unlink(tmp_name)
+        except OSError:
+            pass
+        raise
+
+
 def save_customers(customers: List[Customer]) -> None:
-    """持久化保存客户基础资料到 data/mock_customers.json。"""
-    CUSTOMERS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    """持久化保存客户基础资料到 data/mock_customers.json(加锁 + 原子写)。"""
     raw_data = [c.model_dump() if hasattr(c, "model_dump") else dict(c) for c in customers]
-    with open(CUSTOMERS_FILE, "w", encoding="utf-8") as f:
-        json.dump(raw_data, f, ensure_ascii=False, indent=2)
+    with _customers_lock:
+        _atomic_write_json(CUSTOMERS_FILE, raw_data)
     logger.info("客户列表已持久化保存: %d 家", len(customers))
 
 
@@ -429,44 +483,46 @@ def load_sales() -> List[Sales]:
 
 
 def save_sales(sales_list: List[Sales]) -> None:
-    """持久化保存销售人员列表到 data/mock_sales.json。"""
-    SALES_FILE.parent.mkdir(parents=True, exist_ok=True)
+    """持久化保存销售人员列表到 data/mock_sales.json(加锁 + 原子写)。"""
     raw_data = [s.model_dump() if hasattr(s, "model_dump") else dict(s) for s in sales_list]
-    with open(SALES_FILE, "w", encoding="utf-8") as f:
-        json.dump(raw_data, f, ensure_ascii=False, indent=2)
+    with _sales_lock:
+        _atomic_write_json(SALES_FILE, raw_data)
     logger.info("销售人员列表已持久化保存: %d 名", len(sales_list))
 
 
 def add_sales_member(sales_item: Sales) -> Sales:
-    """新增一名销售人员。"""
-    sales_list = load_sales()
-    if any(s.sales_id == sales_item.sales_id for s in sales_list):
-        raise ValueError(f"销售人员工号 {sales_item.sales_id} 已存在")
-    sales_list.append(sales_item)
-    save_sales(sales_list)
+    """新增一名销售人员(读-改-写整体加锁, 防并发覆盖)。"""
+    with _sales_lock:
+        sales_list = load_sales()
+        if any(s.sales_id == sales_item.sales_id for s in sales_list):
+            raise ValueError(f"销售人员工号 {sales_item.sales_id} 已存在")
+        sales_list.append(sales_item)
+        save_sales(sales_list)
     return sales_item
 
 
 def update_sales_member(sales_item: Sales) -> Sales:
-    """更新一名销售人员的字段(按 sales_id 定位, 覆盖整条记录)。"""
-    sales_list = load_sales()
-    target = next((s for s in sales_list if s.sales_id == sales_item.sales_id), None)
-    if target is None:
-        raise ValueError(f"未找到工号为 {sales_item.sales_id} 的销售人员")
-    sales_list = [sales_item if s.sales_id == sales_item.sales_id else s for s in sales_list]
-    save_sales(sales_list)
+    """更新一名销售人员的字段(按 sales_id 定位, 覆盖整条记录; 读-改-写加锁)。"""
+    with _sales_lock:
+        sales_list = load_sales()
+        target = next((s for s in sales_list if s.sales_id == sales_item.sales_id), None)
+        if target is None:
+            raise ValueError(f"未找到工号为 {sales_item.sales_id} 的销售人员")
+        sales_list = [sales_item if s.sales_id == sales_item.sales_id else s for s in sales_list]
+        save_sales(sales_list)
     return sales_item
 
 
 def delete_sales_member(sales_id: str) -> bool:
-    """删除一名销售人员(不允许删除默认管理员 admin)。"""
+    """删除一名销售人员(不允许删除默认管理员 admin; 读-改-写加锁)。"""
     if sales_id == "admin":
         raise ValueError("系统默认管理员 admin 不允许删除")
-    sales_list = load_sales()
-    new_list = [s for s in sales_list if s.sales_id != sales_id]
-    if len(new_list) == len(sales_list):
-        return False
-    save_sales(new_list)
+    with _sales_lock:
+        sales_list = load_sales()
+        new_list = [s for s in sales_list if s.sales_id != sales_id]
+        if len(new_list) == len(sales_list):
+            return False
+        save_sales(new_list)
     return True
 
 
@@ -614,7 +670,8 @@ def fetch_qikebao_chat(customer_ids: Optional[List[str]] = None) -> List[ChatRec
             return []
         customers = fetch_qikebao_customers()
         if customer_ids:
-            customers = [c for c in customers if c.customer_id in set(customer_ids)]
+            wanted = set(customer_ids)
+            customers = [c for c in customers if c.customer_id in wanted]
         from adapters.qikebao_adapter import load_chat_map_from_qikebao
         chat_map = load_chat_map_from_qikebao(customers)
         records: List[ChatRecord] = []
