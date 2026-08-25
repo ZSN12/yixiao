@@ -462,10 +462,15 @@ def _build_customer_profile(
     增强: 预算范围按价格信号时间衰减标注「最新有效 / 过期(>7天)」。
     """
     sections: List[str] = []
-    sections.append(
+    base_info = (
         f"【客户基础】企业:{customer.customer_name}; 行业:{customer.industry}; "
-        f"城市:{customer.city}; 规模:{customer.scale}; 建档时间:{customer.create_time}。"
+        f"城市:{customer.city}; 规模:{customer.scale}"
     )
+    ssc = getattr(customer, "social_security_count", None)
+    if ssc:
+        base_info += f"; 社保人数:{ssc}人"
+    base_info += f"; 建档时间:{customer.create_time}。"
+    sections.append(base_info)
     role = _extract_role(chat_records)
     if role:
         sections.append(f"【决策角色】主要沟通对象:{role}(采购/立项相关决策角色)。")

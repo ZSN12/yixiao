@@ -51,6 +51,7 @@ class Customer(BaseModel):
     owner_sales_id: Optional[str] = None   # 归属销售, 无归属为 None
     follow_up_status: str = "待跟进"       # 跟进状态: 待跟进/已接单跟进/已电话沟通/已成单/已转交改派
     create_time: str
+    social_security_count: Optional[str] = None   # 社保人数(字符串, 可存 "120" 或 "120-300" 区间)
 
 
 class ChatMessage(BaseModel):
