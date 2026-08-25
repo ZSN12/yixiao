@@ -31,7 +31,8 @@ from __future__ import annotations
 import json
 import logging
 import re
-from typing import Dict, List
+from datetime import date, datetime, timedelta
+from typing import Dict, List, Optional, Tuple
 
 from pydantic import BaseModel
 from typing_extensions import Literal
@@ -68,6 +69,11 @@ INTENTION_MID_SCORE: int = 1
 # 流失等级阈值: 流失分 >= 高阈值 → 高; >= 中阈值 → 中; 否则 → 低
 CHURN_HIGH_SCORE: int = 2
 CHURN_MID_SCORE: int = 1
+
+# 价格信号时间衰减: 7 天新鲜度窗口(超过 7 天的报价视为过期意向价格, 降权)
+PRICE_FRESH_DAYS: int = 7
+# 价格信号对意向评分的权重(过期价格经衰减后乘此系数计入意向分)
+PRICE_SIGNAL_WEIGHT: float = 1.0
 
 # 需求话术模板: 关键词 → 一条需求描述(用于 core_demands 生成)
 _DEMAND_TEMPLATES: Dict[str, str] = {
@@ -130,6 +136,13 @@ SYSTEM_PROMPT = """
 3. 意向等级和流失风险必须从给定枚举中选择
 4. 核心需求提炼要精准，贴合客户真实诉求
 
+重要 —— 对话上下文理解与价格时间衰减规则：
+1. 区分说话者：只有「客户」主动表达的意向/价格/顾虑才是真实信号，销售的话术不应与客户意图混同。
+2. 价格/报价按时间衰减：客户报出的价格/预算若超过 7 天，视为「过期意向价格」，不得作为最新意向价依据，
+   应在 customer_profile 与 intention_reason 中明确标注「该价格已过期(>7天)，可能非最新意向」。
+3. 7 天内客户报的价格/预算才视为「最新有效意向价格」，可正常参与意向判断。
+4. 若输入中提供了「价格时间衰减分析」，请直接参考其结果，不要重新计算时间。
+
 JSON 字段契约（严格按此结构输出）：
 {
   "customer_profile": "客户画像: 含行业属性/决策角色/核心痛点/预算范围的中文描述",
@@ -146,6 +159,152 @@ JSON 字段契约（严格按此结构输出）：
 _ROLE_PATTERN = re.compile(r"([\u4e00-\u9fa5]{1,2}(?:总|主任|经理|总监|部长|老师))")
 # 金额正则(抽取预算范围, 如"500万"/"300万", 只取数字+万)
 _BUDGET_PATTERN = re.compile(r"(\d+(?:\.\d+)?万)")
+# 价格金额正则(更宽: 数字+万/亿/元/块, 用于"报价/价格"语境下的金额识别)
+_PRICE_AMOUNT_PATTERN = re.compile(r"(\d+(?:\.\d+)?)\s*(万|亿|元|块)")
+# 价格/报价语境词(用于判断一条消息是否在"谈价格")
+_PRICE_CONTEXT_KEYWORDS = ["报价", "价格", "预算", "多少钱", "收费", "成本", "单价", "总价", "费用"]
+
+
+# ============================================================
+# 时间衰减 + 价格信号提取(对话上下文理解的核心增强)
+# ============================================================
+
+
+def _parse_chat_date(chat_time: str) -> Optional[date]:
+    """解析聊天时间字符串为 date 对象。
+
+    支持 `YYYY-MM-DD`、`YYYY-MM-DDTHH:MM:SS`、`YYYY-MM-DD HH:MM:SS` 等格式。
+    解析失败返回 None(该条消息的时间无法用于衰减计算, 按"过期"处理由上层决定)。
+    """
+    if not chat_time:
+        return None
+    try:
+        # 优先按日期解析(取前 10 位)
+        return datetime.strptime(chat_time[:10], "%Y-%m-%d").date()
+    except (ValueError, IndexError):
+        return None
+
+
+def _now_date() -> date:
+    """返回真实当前日期(时间衰减的基准时间)。"""
+    return datetime.now().date()
+
+
+def _days_since(chat_date: Optional[date], reference: Optional[date] = None) -> Optional[int]:
+    """计算聊天日期距基准日期的天数(负数表示未来, 按 0 处理为"最新")。
+
+    Args:
+        chat_date: 聊天日期(可 None)。
+        reference: 基准日期(默认真实当前日期)。
+
+    Returns:
+        int | None: 距今天数(>=0); chat_date 为 None 时返回 None。
+    """
+    if chat_date is None:
+        return None
+    ref = reference or _now_date()
+    delta = (ref - chat_date).days
+    return max(0, delta)
+
+
+def price_freshness_weight(chat_time: str, reference: Optional[date] = None) -> Tuple[float, Optional[int]]:
+    """计算价格信号的时间衰减权重。
+
+    规则(7 天新鲜度窗口):
+        - 0~7 天内: 权重 1.0(最新有效意向价格);
+        - 超过 7 天: 按半衰期衰减 —— 每超过 7 天权重减半, 最低保底 0.1
+          (过期价格仍保留弱信号, 不彻底忽略)。
+
+    Args:
+        chat_time: 聊天时间字符串。
+        reference: 基准日期(默认真实当前日期)。
+
+    Returns:
+        tuple[float, int | None]: (衰减权重 0.1~1.0, 距今天数; 时间无法解析时天数为 None)。
+    """
+    chat_date = _parse_chat_date(chat_time)
+    days = _days_since(chat_date, reference)
+    if days is None:
+        return 0.1, None
+    if days <= PRICE_FRESH_DAYS:
+        return 1.0, days
+    # 半衰期衰减: 每超过一个 7 天窗口权重减半, 保底 0.1
+    windows = (days - PRICE_FRESH_DAYS) // PRICE_FRESH_DAYS + 1
+    weight = max(0.1, 1.0 / (2 ** windows))
+    return weight, days
+
+
+def _extract_price_signal(
+    chat_records: List[ChatRecord],
+    reference: Optional[date] = None,
+) -> List[Dict[str, object]]:
+    """从对话中提取「价格/报价信号」, 附带说话者、金额、时间与衰减权重。
+
+    上下文理解要点:
+        1. 只认「客户」说的话(销售报的价是卖方报价, 客户报的才是真实意向预算);
+        2. 消息须同时命中价格语境词 + 金额数字, 才算一条有效价格信号;
+        3. 按 chat_time 计算时间衰减权重, 输出最新/过期标注。
+
+    Args:
+        chat_records: 会话记录列表。
+        reference: 基准日期(默认真实当前日期)。
+
+    Returns:
+        list[dict]: 每条含 {amount, chat_time, days, weight, fresh, content}。
+    """
+    signals: List[Dict[str, object]] = []
+    for record in chat_records:
+        for msg in record.messages:
+            if msg.role != "客户":
+                continue  # 只认客户说的话(真实意向价格)
+            if not any(kw in msg.content for kw in _PRICE_CONTEXT_KEYWORDS):
+                continue
+            m = _PRICE_AMOUNT_PATTERN.search(msg.content)
+            if not m:
+                continue
+            weight, days = price_freshness_weight(record.chat_time, reference)
+            signals.append({
+                "amount": m.group(0),
+                "chat_time": record.chat_time,
+                "days": days,
+                "weight": weight,
+                "fresh": days is not None and days <= PRICE_FRESH_DAYS,
+                "content": msg.content,
+            })
+    return signals
+
+
+def _aggregate_price_signals(signals: List[Dict[str, object]]) -> Dict[str, object]:
+    """聚合价格信号: 取权重最高的有效价格作为「最新意向价格」, 并汇总过期信息。
+
+    Args:
+        signals: _extract_price_signal 的输出。
+
+    Returns:
+        dict: {latest_amount, latest_weight, latest_days, fresh, expired_count,
+               total_count, detail_text}。
+    """
+    if not signals:
+        return {
+            "latest_amount": "", "latest_weight": 0.0, "latest_days": None,
+            "fresh": False, "expired_count": 0, "total_count": 0, "detail_text": "",
+        }
+    # 按权重降序(权重相同取更新的即天数更小的)
+    best = max(signals, key=lambda s: (float(s["weight"]), -(int(s["days"] or 9999))))
+    expired = [s for s in signals if not s["fresh"]]
+    detail_parts = []
+    for s in sorted(signals, key=lambda x: -(int(x["days"] or 9999))):
+        tag = "最新" if s["fresh"] else "过期"
+        detail_parts.append(f"{s['amount']}({tag}, {s['days']}天, 权重{s['weight']:.2f})")
+    return {
+        "latest_amount": best["amount"],
+        "latest_weight": float(best["weight"]),
+        "latest_days": best["days"],
+        "fresh": bool(best["fresh"]),
+        "expired_count": len(expired),
+        "total_count": len(signals),
+        "detail_text": "；".join(detail_parts),
+    }
 
 
 # ============================================================
@@ -176,6 +335,16 @@ def _join_chat_text(chat_records: List[ChatRecord]) -> str:
     for record in chat_records:
         for msg in record.messages:
             parts.append(f"{msg.role}:{msg.content}")
+    return "\n".join(parts)
+
+
+def _join_customer_text(chat_records: List[ChatRecord]) -> str:
+    """只拼「客户」角色的消息文本(用于区分说话者, 客户表达的意向信号更可信)。"""
+    parts: List[str] = []
+    for record in chat_records:
+        for msg in record.messages:
+            if msg.role == "客户":
+                parts.append(msg.content)
     return "\n".join(parts)
 
 
@@ -284,10 +453,13 @@ def _build_customer_profile(
     pos_hits: Dict[str, int],
     neg_hits: Dict[str, int],
     churn_hits: Dict[str, int],
+    price_agg: Optional[Dict[str, object]] = None,
 ) -> str:
     """确定性生成客户画像文本: 行业属性/决策角色/核心痛点/预算范围 + 沟通要点。
 
     该文本即 RAG 检索器 retrieve_top_sales 的 query_text 输入来源。
+
+    增强: 预算范围按价格信号时间衰减标注「最新有效 / 过期(>7天)」。
     """
     sections: List[str] = []
     sections.append(
@@ -302,11 +474,32 @@ def _build_customer_profile(
         sections.append(f"【核心痛点】{pain}。")
     else:
         sections.append("【核心痛点】暂无明确异议, 痛点需进一步沟通挖掘。")
-    budget = _extract_budget(chat_records)
-    if budget:
-        sections.append(f"【预算范围】客户沟通中提及预算约:{budget}。")
+
+    # ---- 预算范围: 结合价格信号时间衰减 ----
+    if price_agg and price_agg.get("latest_amount"):
+        if price_agg["fresh"]:
+            sections.append(
+                f"【预算范围】最新有效意向价格:{price_agg['latest_amount']}"
+                f"({price_agg['latest_days']}天前, 7天内有效)。"
+            )
+        else:
+            sections.append(
+                f"【预算范围】最新报价 {price_agg['latest_amount']} 已过期"
+                f"({price_agg['latest_days']}天前, 超过{PRICE_FRESH_DAYS}天, 权重{price_agg['latest_weight']:.2f}), "
+                f"可能非最新意向价格, 需重新确认。"
+            )
+        if price_agg.get("expired_count"):
+            sections.append(
+                f"【价格时间衰减】共{price_agg['total_count']}条价格信号, "
+                f"{price_agg['expired_count']}条已过期(>7天)。"
+            )
     else:
-        sections.append("【预算范围】未明确金额, 需在跟进中确认预算空间。")
+        budget = _extract_budget(chat_records)
+        if budget:
+            sections.append(f"【预算范围】客户沟通中提及预算约:{budget}。")
+        else:
+            sections.append("【预算范围】未明确金额, 需在跟进中确认预算空间。")
+
     if pos_hits:
         sections.append(f"【意向信号】命中:{'/'.join(_list_hit_keywords(pos_hits))}。")
     if neg_hits:
@@ -340,39 +533,83 @@ def _build_follow_up_suggestion(intention_level: str, churn_risk: str) -> str:
 
 
 def _fallback_to_rules(customer: Customer, chat_records: List[ChatRecord]) -> AnalysisResult:
-    """规则引擎兜底: 不调 LLM, 关键词打分确定性生成结果(可复现)。"""
+    """规则引擎兜底: 不调 LLM, 关键词打分 + 价格时间衰减确定性生成结果(可复现)。
+
+    增强点(对话上下文理解 + 价格时间衰减):
+        1. 按角色统计信号: 客户说的话比销售的话更可信(客户主动表达的意向/价格
+           才是真实信号), 因此在关键词计数时对客户侧消息加权;
+        2. 价格信号按 chat_time 做 7 天新鲜度衰减 —— 超过 7 天的报价视为
+           "过期意向价格", 降权参与意向评分, 并在画像/原因中显式标注。
+    """
     text = _join_chat_text(chat_records)
     pos_hits = _count_keywords(text, INTENT_POSITIVE_KEYWORDS)
     neg_hits = _count_keywords(text, INTENT_NEGATIVE_KEYWORDS)
     churn_hits = _count_keywords(text, CHURN_POSITIVE_KEYWORDS)
 
-    pos_total = sum(pos_hits.values())
-    neg_total = sum(neg_hits.values())
-    churn_total = sum(churn_hits.values())
+    # ---- 增强1: 按角色区分信号(客户说的更可信) ----
+    # 客户侧文本只拼「客户」角色的消息, 用于额外加权统计
+    customer_text = _join_customer_text(chat_records)
+    customer_pos = _count_keywords(customer_text, INTENT_POSITIVE_KEYWORDS)
+    customer_neg = _count_keywords(customer_text, INTENT_NEGATIVE_KEYWORDS)
+    customer_churn = _count_keywords(customer_text, CHURN_POSITIVE_KEYWORDS)
 
-    # 意向分 = 加分 - 减分 - 流失分(流失信号同时压降意向, 防误判高意向)
-    intention_score = pos_total - neg_total - churn_total
-    intention_level = _score_to_intention_level(intention_score)
+    # 客户主动表达的积极信号 +1 加权(意向真实性强于销售话术)
+    pos_total = sum(pos_hits.values()) + sum(customer_pos.values())
+    neg_total = sum(neg_hits.values()) + sum(customer_neg.values())
+    churn_total = sum(churn_hits.values()) + sum(customer_churn.values())
+
+    # ---- 增强2: 价格信号时间衰减 ----
+    price_signals = _extract_price_signal(chat_records)
+    price_agg = _aggregate_price_signals(price_signals)
+    # 价格信号按衰减权重折算计入意向分: 最新价格(权重1.0)计入 1 次积极信号
+    # 的强度, 过期价格按衰减权重打折(降权参与, 不彻底忽略)。
+    price_score = price_agg["latest_weight"] if price_signals else 0.0
+
+    # 意向分 = 加分 - 减分 - 流失分 + 价格新鲜度加权(浮点, 保留价格信号的影响)
+    intention_score = float(pos_total - neg_total - churn_total) + price_score * PRICE_SIGNAL_WEIGHT
+    intention_level = _score_to_intention_level(round(intention_score))
     churn_level = _score_to_churn_level(churn_total)
 
     # 原因文本: 命中明细 + 得分 + 判定
     def _hit_detail(hits: Dict[str, int]) -> str:
         return "/".join(f"{kw}x{n}" for kw, n in hits.items()) if hits else "无"
 
+    # 价格信号详情(供原因溯源)
+    price_note = ""
+    if price_signals:
+        if price_agg["fresh"]:
+            price_note = (
+                f"价格信号: 最新报价 {price_agg['latest_amount']}"
+                f"({price_agg['latest_days']}天前, 有效, 权重{price_agg['latest_weight']:.2f})"
+            )
+        else:
+            price_note = (
+                f"价格信号: 最新报价 {price_agg['latest_amount']} 已过期"
+                f"({price_agg['latest_days']}天前 > {PRICE_FRESH_DAYS}天, "
+                f"降权至{price_agg['latest_weight']:.2f})"
+            )
+        if price_agg["expired_count"]:
+            price_note += f"; 共{price_agg['total_count']}条价格信号, {price_agg['expired_count']}条过期"
+
     intention_reason = (
         f"意向信号命中 {pos_total} 次({_hit_detail(pos_hits)}), "
         f"异议信号命中 {neg_total} 次({_hit_detail(neg_hits)}), "
         f"流失信号命中 {churn_total} 次({_hit_detail(churn_hits)}); "
-        f"意向得分 = {pos_total}-{neg_total}-{churn_total} = {intention_score}, "
+        f"意向得分 = {pos_total}-{neg_total}-{churn_total}+价格加权{price_score:.2f} = {intention_score:.2f}, "
         f"判定意向等级为「{intention_level}」。"
     )
+    if price_note:
+        intention_reason += f" {price_note}。"
+
     churn_reason = (
         f"流失信号命中 {churn_total} 次({_hit_detail(churn_hits)}), "
         f"流失得分 = {churn_total}, 判定流失风险为「{churn_level}」。"
     )
 
     result = AnalysisResult(
-        customer_profile=_build_customer_profile(customer, chat_records, pos_hits, neg_hits, churn_hits),
+        customer_profile=_build_customer_profile(
+            customer, chat_records, pos_hits, neg_hits, churn_hits, price_agg,
+        ),
         intention_level=intention_level,
         intention_reason=intention_reason,
         core_demands=_build_core_demands(pos_hits, neg_hits, churn_hits),
@@ -380,8 +617,9 @@ def _fallback_to_rules(customer: Customer, chat_records: List[ChatRecord]) -> An
         churn_reason=churn_reason,
         follow_up_suggestion=_build_follow_up_suggestion(intention_level, churn_level),
     )
-    logger.info("规则引擎生成画像: customer_id=%s, 意向=%s, 流失=%s",
-                customer.customer_id, result.intention_level, result.churn_risk)
+    logger.info("规则引擎生成画像: customer_id=%s, 意向=%s, 流失=%s, 价格信号=%d条(最新%0.2f)",
+                customer.customer_id, result.intention_level, result.churn_risk,
+                len(price_signals), price_agg["latest_weight"])
     return result
 
 
@@ -414,10 +652,15 @@ def _analyze_with_llm(customer: Customer, chat_records: List[ChatRecord]) -> Ana
     """
     from modules import llm_client
 
-    # user 消息 = 客户基础信息 JSON + 聊天记录 JSON
+    # 价格时间衰减分析(规则层预计算, 注入给 LLM 参考, 保证时间语义一致)
+    price_signals = _extract_price_signal(chat_records)
+    price_agg = _aggregate_price_signals(price_signals)
+
+    # user 消息 = 客户基础信息 JSON + 聊天记录 JSON + 价格时间衰减分析
     payload = {
         "客户基础信息": customer.model_dump(),
         "聊天记录": [record.model_dump() for record in chat_records],
+        "价格时间衰减分析": price_agg if price_signals else None,
     }
     data = llm_client.chat_json(
         SYSTEM_PROMPT,

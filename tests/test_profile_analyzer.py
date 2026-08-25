@@ -147,3 +147,82 @@ def test_intention_penalized_by_negative_and_churn(isolated_env):
     result = profile_analyzer.analyze_customer(customer, records)
     assert result.intention_level == "低"
     assert result.churn_risk == "高"
+
+
+# ============================================================
+# 对话上下文理解 + 价格时间衰减 单测
+# ============================================================
+
+
+def _make_price_records(chat_time: str, content: str, role: str = "客户") -> list:
+    """构造一条价格/预算相关的聊天记录。"""
+    return [
+        ChatRecord(
+            record_id="RP", customer_id="U1", chat_time=chat_time,
+            messages=[ChatMessage(role=role, content=content)],
+        ),
+    ]
+
+
+def test_price_freshness_weight_within_7_days():
+    """7 天内价格信号权重为 1.0(最新有效意向价格)。"""
+    from datetime import date, timedelta
+    recent = (date.today() - timedelta(days=3)).isoformat()
+    weight, days = profile_analyzer.price_freshness_weight(recent)
+    assert weight == 1.0
+    assert days == 3
+
+
+def test_price_freshness_weight_expired_decays():
+    """超过 7 天价格信号权重衰减(< 1.0, 降权不归零)。"""
+    from datetime import date, timedelta
+    old = (date.today() - timedelta(days=30)).isoformat()
+    weight, days = profile_analyzer.price_freshness_weight(old)
+    assert days == 30
+    assert 0.0 < weight < 1.0   # 过期降权, 但不彻底忽略
+
+
+def test_price_freshness_weight_unparseable():
+    """无法解析的时间按过期保底权重处理(0.1), 天数为 None。"""
+    weight, days = profile_analyzer.price_freshness_weight("not-a-date")
+    assert weight == 0.1
+    assert days is None
+
+
+def test_extract_price_signal_only_from_customer():
+    """说话者区分: 只有「客户」说的话才算价格信号, 销售报价不算客户意向价。"""
+    sales_only = _make_price_records("2024-01-01", "我们预算方案大概500万, 报价已发您", role="销售")
+    signals = profile_analyzer._extract_price_signal(sales_only)
+    assert signals == []
+
+
+def test_extract_price_signal_from_customer():
+    """客户报预算 + 金额 → 提取到价格信号(带金额/时间/权重)。"""
+    customer_records = _make_price_records("2024-01-01", "我们预算大概500万, 要尽快立项", role="客户")
+    signals = profile_analyzer._extract_price_signal(customer_records)
+    assert len(signals) >= 1
+    assert "500万" in signals[0]["amount"]
+    assert "weight" in signals[0]
+    assert "fresh" in signals[0]
+
+
+def test_price_decay_affects_intention_level():
+    """价格时间衰减真实影响意向: 纯价格信号(无其他强意向词)下, 过期报价降级。"""
+    from datetime import date, timedelta
+    customer = _make_customer("U3")
+
+    # 2 天前: 价格新鲜 → 高意向(价格信号权重 1.0 补足到高阈值)
+    fresh = _make_price_records(
+        (date.today() - timedelta(days=2)).isoformat(), "我们预算大概500万", role="客户",
+    )
+    r_fresh = profile_analyzer._fallback_to_rules(customer, fresh)
+    assert r_fresh.intention_level == "高"
+
+    # 30 天前: 价格过期 → 降权, 意向跌破高阈值 → 中
+    old = _make_price_records(
+        (date.today() - timedelta(days=30)).isoformat(), "我们预算大概500万", role="客户",
+    )
+    r_old = profile_analyzer._fallback_to_rules(customer, old)
+    assert r_old.intention_level == "中"
+    # 画像中标注"过期"
+    assert "过期" in r_old.customer_profile or "过期" in r_old.intention_reason
