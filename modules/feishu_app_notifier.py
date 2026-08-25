@@ -776,7 +776,7 @@ def build_note_form_card(customer_id: str, customer_name: str) -> Dict[str, Any]
                     },
                 ],
             },
-            {"tag": "note", "elements": [{"tag": "plain_text", "content": "提交后 AI 将自动重估意向等级并同步多维表格"}]},
+            {"tag": "note", "elements": [{"tag": "plain_text", "content": "提交后 AI 将自动重估意向等级"}]},
         ],
     }
 
@@ -839,7 +839,7 @@ def build_note_analyzed_card(customer_id: str, customer_name: str, note_text: st
             {"tag": "hr"},
             {
                 "tag": "note",
-                "elements": [{"tag": "plain_text", "content": "意向重估结果已同步至易销后台与飞书多维表格"}],
+                "elements": [{"tag": "plain_text", "content": "意向重估结果已同步至易销后台"}],
             },
         ],
     }

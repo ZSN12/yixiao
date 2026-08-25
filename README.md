@@ -1,6 +1,6 @@
 # 易销 · 销售线索智能分析与分发助手
 
-> 一句话定位: 一套带 **Web 运营看板 + 飞书销售端 + 每日自动流水线** 的 B 端销售线索智能分析分发系统 —— 把「客户会话画像 → 意向分层 → RAG 线索匹配 → 飞书/钉钉触达 → 飞书多维表格双向同步 → SLA 超时流转公海」串成一条可闭环、可降级、开箱即跑的流水线。
+> 一句话定位: 一套带 **Web 看板 + 飞书销售端 + 每日自动流水线** 的 B 端销售线索智能分析分发系统 —— 把「企客宝客户 + 电话语音 → 会话画像 → 意向分层 → RAG 线索匹配 → 飞书/钉钉触达 → SLA 超时流转公海」串成一条可闭环、可降级、开箱即跑的流水线。
 
 ---
 
@@ -10,7 +10,7 @@
 
 1. **画像**: 从客户对话记录中提炼意向等级 / 流失风险 / 核心需求 / 跟进建议（LLM 与规则双引擎）。
 2. **分发**: 用「规则硬约束 + RAG 语义匹配 + 记忆反哺 + 负载均衡」把线索精准分给最合适的销售。
-3. **闭环**: 通过飞书卡片让销售接单 / 录入小记 / 生成话术，AI 动态重估意向；SLA 超时自动流转公海；飞书多维表格双向同步。
+3. **闭环**: 通过飞书卡片让销售接单 / 录入小记 / 生成话术，AI 动态重估意向；SLA 超时自动流转公海。
 
 ---
 
@@ -76,7 +76,6 @@
 | `modules/sales_profile_engine.py` | 销售能力画像（基于 CRM 成交历史） |
 | `modules/experience_refinery.py` | 成交商机 → 销售经验片段提炼沉淀 |
 | `modules/sla_monitor.py` | SLA 超时预警 + 自动流转公海 |
-| `modules/bitable_sync.py` | 飞书多维表格（Bitable）双向同步 |
 | `modules/data_source_registry.py` | 数据源接入中心（SQLite 持久化 CRUD） |
 | `modules/user_auth.py` | 用户认证（账号密码 + 进程内 token 会话） |
 | `modules/llm_client.py` | 统一 LLM 网关（Kimi / OpenAI 兼容可插拔） |
@@ -135,7 +134,6 @@ sales-agent/
 │   ├── notes.py                     # 小记 / 话术 / 反馈
 │   ├── sla.py                       # SLA 预警流转
 │   ├── feishu.py                    # 飞书卡片回调
-│   ├── bitable.py                   # 多维表格双向同步
 │   └── static.py                    # 静态资源 / 根路由 / health
 ├── config/
 │   ├── settings.py                  # pydantic-settings 配置中心
@@ -162,8 +160,7 @@ sales-agent/
 - **价格时间衰减**: 客户报价按 7 天新鲜度窗口衰减，超过 7 天视为过期意向价格、降权参与评分并在画像/原因中显式标注。
 - **飞书闭环**: 卡片接单 / 改派 / 录小记 AI 重估 / 破冰话术，全部原地更新卡片。
 - **SLA 守护**: 超时自动流转公海，预警/超时飞书卡片提醒销售。
-- **双向同步**: 飞书多维表格（Bitable）⇄ 易销 增量同步。
-- **数据源接入中心**: 7 类数据源（企客宝 CRM / CSV / 企微会话 / CRM 接口 / 飞书多维表 / 自定义 Webhook / 电话录音）可增删改查，SQLite 持久化；企客宝为主数据源，mock/CSV/企微兜底。
+- **数据源接入中心**: 6 类数据源（企客宝 CRM / CSV / 企微会话 / CRM 接口 / 自定义 Webhook / 电话录音）可增删改查，SQLite 持久化；企客宝为主数据源，mock/CSV/企微兜底。
 - **确定性可复现**: mock 模式全规则引擎，意向分层（高/中/低）与流失分层完全确定，便于验收与回归。
 
 ---
@@ -188,10 +185,6 @@ sales-agent/
 | `DINGTALK_SECRET` | `dingtalk_secret` | `""` | 钉钉群机器人加签密钥 |
 | `FEISHU_APP_ID` / `FEISHU_APP_SECRET` | `feishu_app_id` / `feishu_app_secret` | `""` | 飞书企业自建应用凭证（个人卡片 / SLA 预警） |
 | `FEISHU_WEBAPP_URL` | `feishu_webapp_url` | `""` | 易销网页应用公网地址 |
-| `FEISHU_BASE_TOKEN` | `feishu_base_token` | `""` | 飞书多维表格访问凭证 |
-| `FEISHU_BASE_LEADS_TABLE` | `feishu_base_leads_table` | `tbluJCdsnsMaWYYD` | 客户线索池表 ID |
-| `FEISHU_BASE_SALES_TABLE` | `feishu_base_sales_table` | `tbl9XxtsQVMt30Gr` | 销售团队画像表 ID |
-| `FEISHU_BASE_MEMORY_TABLE` | `feishu_base_memory_table` | `tblJeTx2w24LvQdc` | 分配记录与记忆中心表 ID |
 | `NOTIFIER_CHANNEL` | `notifier_channel` | `feishu` | 通知通道默认选择: `feishu` / `dingtalk` |
 | `SALES_MOBILE_MAP` | `sales_mobile_map` | `""` | 销售 ID→手机号映射（一对一工作通知） |
 | `VERIFY_SSL` | `verify_ssl` | `False` | HTTPS 证书校验 |
@@ -269,7 +262,6 @@ sales-agent/
 | 小记/话术 | `GET/POST /follow-up-notes*`、`GET /talk-track/{id}` | 跟进小记 + AI 话术 |
 | SLA | `GET /sla/status`、`POST /sla/check` | SLA 预警 + 流转公海 |
 | 飞书 | `POST /feishu/card-action` | 飞书卡片按钮回调 |
-| 多维表格 | `POST /api/sync/bitable/pull` / `push` / `(both)` | 飞书 Bitable 双向同步 |
 | 数据源 | `GET /api/data-sources` / `GET /api/data-sources/types`、`POST/PATCH/DELETE /api/data-sources[/{id}]` | 数据源接入中心 CRUD |
 | 静态 | `GET /`、`GET /m/`、`/static/*` | 看板 / 移动端 / 静态资源 |
 

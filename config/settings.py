@@ -42,12 +42,6 @@ class Settings(BaseSettings):
     feishu_app_secret: str = ""
     # 易销网页应用公网地址(销售从飞书卡片/网页应用进入易销移动端的入口; 注意 trycloudflare 临时地址重启会变)
     feishu_webapp_url: str = ""
-    # 飞书多维表格(Bitable)同步配置: base_token 属访问凭证, 请在 config/.env 配置,
-    # 勿写死在源码中; table_id 非敏感, 可给默认值。
-    feishu_base_token: str = ""
-    feishu_base_leads_table: str = "tbluJCdsnsMaWYYD"      # 客户线索池
-    feishu_base_sales_table: str = "tbl9XxtsQVMt30Gr"      # 销售团队画像
-    feishu_base_memory_table: str = "tblJeTx2w24LvQdc"     # 分配记录与记忆中心
     # 通知通道统一入口选择的默认通道: "feishu" | "dingtalk"(谁配了 webhook 用谁, 都没配打印提示)
     notifier_channel: str = "feishu"
     # 销售人员 ID -> 飞书绑定手机号映射 (用于一对一定向推送工作通知);

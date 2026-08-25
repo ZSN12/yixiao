@@ -339,7 +339,7 @@
     + '        让线索流转更具<span class="gradient-word">确定性</span>'
     + '      </h1>'
     + '      <p class="stage-desc">'
-    + '        基于深度语义画像与销售经验图谱，实现多维表格实时同步与智能策略分发。'
+    + '        基于深度语义画像与销售经验图谱，实现线索双向闭环与智能策略分发。'
     + '      </p>'
     + '      <!-- 核心 AI 智能体实时流转看板 -->'
     + '      <div class="agent-live-console">'
@@ -382,7 +382,7 @@
     + '          </div>'
     + '          <div class="metric-info">'
     + '            <div class="metric-val">100%</div>'
-    + '            <div class="metric-lbl">飞书双向实时闭环</div>'
+    + '            <div class="metric-lbl">双向闭环</div>'
     + '          </div>'
     + '        </div>'
     + '        <div class="metric-card">'
@@ -1106,7 +1106,7 @@
     methods: {
       reload: function(){ loadDataSources(); },
       typeIcon: function(t){
-        var map = { csv:"file", wework:"chat", crm:"database", bitable:"table", webhook:"link" };
+        var map = { csv:"file", wework:"chat", crm:"database", webhook:"link" };
         return ICONS[map[t] || "database"];
       },
       typeIconStyle: function(t){
@@ -1114,7 +1114,6 @@
           csv:  "background:rgba(56,189,248,0.15);color:#38bdf8;border-color:rgba(56,189,248,0.3)",
           wework:"background:rgba(52,211,153,0.15);color:#34d399;border-color:rgba(52,211,153,0.3)",
           crm:  "background:rgba(168,85,247,0.15);color:#c084fc;border-color:rgba(168,85,247,0.3)",
-          bitable:"background:rgba(59,130,246,0.15);color:#60a5fa;border-color:rgba(59,130,246,0.3)",
           webhook:"background:rgba(251,146,60,0.15);color:#fb923c;border-color:rgba(251,146,60,0.3)"
         };
         return colors[t] || "background:rgba(100,116,139,0.15);color:#94a3b8;border-color:rgba(100,116,139,0.3)";

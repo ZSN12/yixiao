@@ -153,10 +153,10 @@ def _customers_with_levels() -> List[Dict[str, Any]]:
     """返回全量客户列表, 并从 analysis_history 最新批次 join 意向/流失等级。
 
     抽取自 /customers 的公共逻辑, 供移动端"我的客户"复用。
-    注意: 客户列表已合并飞书多维表格同步状态(跟进状态/归属销售) + SLA 超时流转
-    (超时释放回公海的客户 owner_sales_id 覆盖为 None)。
+    注意: 客户列表已合并 SLA 超时流转(超时释放回公海的客户 owner_sales_id
+    覆盖为 None)。
     """
-    customers = data_loader.apply_bitable_sync_state(data_loader.load_customers())
+    customers = data_loader.load_customers()
     # 合并 SLA 超时流转(释放归属回公海)
     customers = sla_monitor.apply_sla_overlay(customers)
     result: List[Dict[str, Any]] = [

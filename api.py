@@ -9,7 +9,6 @@
 - notes.py        : 跟进小记 / AI 话术 / 人工复核反馈。
 - sla.py          : SLA 超时预警 + 自动流转公海。
 - feishu.py       : 飞书卡片按钮交互回调。
-- bitable.py      : 飞书多维表格双向同步。
 - phone_webhook.py: 电话录音 webhook 回调 + 低置信度角色复核。
 - static.py       : 静态资源托管 + 根路由 + 健康检查。
 
@@ -37,7 +36,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from modules import data_source_registry  # noqa: E402
 from modules import user_auth  # noqa: E402
 
-from api_routes import auth, bitable, customers, data_sources, feishu, feishu_auth, notes, phone_webhook, pipeline, sla, static  # noqa: E402
+from api_routes import auth, customers, data_sources, feishu, feishu_auth, notes, phone_webhook, pipeline, sla, static  # noqa: E402
 from api_routes.common import _global_exception_handler  # noqa: E402
 
 logger = logging.getLogger(__name__)
@@ -79,7 +78,6 @@ app.include_router(notes.router)
 app.include_router(sla.router)
 app.include_router(feishu.router)
 app.include_router(feishu_auth.router)
-app.include_router(bitable.router)
 app.include_router(phone_webhook.router)
 app.include_router(static.router)
 

@@ -14,7 +14,7 @@
 
 设计约束:
     - 独立状态层 data/sla_state.json, 不污染 mock_customers.json 测试基线
-      (与 bitable_sync_state 同款 overlay 思路);
+      (overlay 思路);
     - 规则确定性、可复现, 不依赖 LLM;
     - 流转公海通过「在 sla_state 里标记 override_owner=None + 通知」实现,
       不直接改 mock_customers.json 的 owner_sales_id 基线。
@@ -170,7 +170,7 @@ def check_sla(
             {customer_id, customer_name, owner_sales_id, assigned_at,
              last_follow_up_at, elapsed_hours, sla_status}。
     """
-    customers = data_loader.apply_bitable_sync_state(data_loader.load_customers())
+    customers = data_loader.load_customers()
     sla_state = _load_sla_state()
     now = _now()
 

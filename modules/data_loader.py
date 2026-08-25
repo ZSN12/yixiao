@@ -418,46 +418,6 @@ def save_customers(customers: List[Customer]) -> None:
     logger.info("客户列表已持久化保存: %d 家", len(customers))
 
 
-def apply_bitable_sync_state(customers: List["Customer"]) -> List["Customer"]:
-    """把飞书多维表格同步状态层合并到客户列表(用于业务查询感知飞书变更)。
-
-    同步状态层(modules/bitable_sync 维护的 data/bitable_sync_state.json)记录
-    飞书表格里「跟进状态 / 归属销售」相对本地 mock 基线的变更; 本函数把这些
-    变更合并到传入的客户对象上, 返回新列表(不修改原对象, 也不改 mock 基线文件)。
-
-    Args:
-        customers: 客户模型列表。
-
-    Returns:
-        list[Customer]: 合并同步状态后的新列表。
-    """
-    state_file = PROJECT_ROOT / "data" / "bitable_sync_state.json"
-    if not state_file.exists():
-        return customers
-    try:
-        with open(state_file, encoding="utf-8") as fh:
-            sync_state = json.load(fh)
-    except (json.JSONDecodeError, OSError):
-        return customers
-    if not isinstance(sync_state, dict):
-        return customers
-
-    merged: List[Customer] = []
-    for c in customers:
-        st = sync_state.get(c.customer_name)
-        if not isinstance(st, dict) or st.get("_remote_only"):
-            merged.append(c)
-            continue
-        # 构造合并后的字段(不改原对象)
-        new_data = c.model_dump() if hasattr(c, "model_dump") else dict(c)
-        if st.get("follow_up_status") is not None:
-            new_data["follow_up_status"] = st["follow_up_status"]
-        if "owner_sales_id" in st:
-            new_data["owner_sales_id"] = st.get("owner_sales_id")
-        merged.append(Customer(**new_data))
-    return merged
-
-
 def load_chat_records() -> List[ChatRecord]:
     """加载全部会话记录。
 

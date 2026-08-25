@@ -8,8 +8,9 @@
     "csv"             CSV 文件导入
     "wework"          企微会话存档 JSON
     "crm"             CRM 客户接口
-    "bitable"         飞书多维表 Bitable
     "webhook"         自定义 Webhook/API
+    "phone_call"      电话录音(ASR + 角色识别)
+    "qikebao"         企客宝 CRM(客户主数据源)
 - 每个数据源有: name(展示名), type, config(JSON 配置), enabled(启用/停用), builtin(是否系统预置),
   status(状态快照), last_pulled_at(最近拉取时间), created_at。
 - 持久化到 SQLite 表 data_sources, 与画像历史等共用 data/sales_agent.db。
@@ -54,15 +55,6 @@ SOURCE_TYPES: Dict[str, dict] = {
             {"key": "api_key", "label": "API 凭证", "placeholder": "可选", "required": False},
         ],
     },
-    "bitable": {
-        "label": "飞书多维表 Bitable",
-        "icon": "table",
-        "desc": "对接飞书多维表双向同步",
-        "fields": [
-            {"key": "base_token", "label": "Base Token", "placeholder": "feishu base token", "required": True},
-            {"key": "leads_table", "label": "线索表 ID", "placeholder": "tblxxx", "required": False},
-        ],
-    },
     "webhook": {
         "label": "自定义 Webhook/API",
         "icon": "link",
@@ -95,7 +87,6 @@ BUILTIN_SOURCES: List[dict] = [
     {"name": "CRM 客户列表", "type": "crm", "config": {"api_base": "https://crm.example.com/api", "api_key": ""}, "enabled": True, "status": "预留", "builtin": True},
     {"name": "企微会话存档", "type": "wework", "config": {"file_path": "data/real/wework_chat_export.json"}, "enabled": True, "status": "预留", "builtin": True},
     {"name": "CRM 成交商机", "type": "crm", "config": {"api_base": "https://crm.example.com/api", "api_key": ""}, "enabled": True, "status": "预留", "builtin": True},
-    {"name": "飞书多维表同步", "type": "bitable", "config": {"base_token": "", "leads_table": "tbluJCdsnsMaWYYD"}, "enabled": True, "status": "预留", "builtin": True},
     {"name": "电话录音(演示)", "type": "phone_call", "config": {"manifest_path": "data/real/phone_call_manifest.json", "asr_provider": "mock"}, "enabled": False, "status": "待接入", "builtin": True},
     {"name": "企客宝 CRM", "type": "qikebao", "config": {"client_id": "", "client_secret": "", "corp_id": ""}, "enabled": False, "status": "待接入", "builtin": True},
 ]
