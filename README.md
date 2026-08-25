@@ -211,6 +211,34 @@ sales-agent/
 | `QIKEBAO_SYNC_CHAT` | `qikebao_sync_chat` | `False` | P1: 是否同步企客宝会话存档 |
 | `QIKEBAO_CUSTOMER_ID_PREFIX` | `qikebao_customer_id_prefix` | `QKB-` | 客户 ID 前缀，防与 mock 冲突 |
 
+> **企客宝两个开关怎么配合（`QIKEBAO_SYNC_ENABLED` × `QIKEBAO_MOCK_MODE`）**
+>
+> | `SYNC_ENABLED` | `MOCK_MODE` | 实际行为 |
+> |---|---|---|
+> | `False`（默认） | `True`（默认） | 读 `sample/` mock JSON，不调外网 —— 开箱即跑 |
+> | `False` | `False` | 企客宝完全关闭，走 CSV / 企微 / 其他兜底数据源 |
+> | `True` | `True` | 凭证齐全则走企客宝；请求失败/凭证缺失时**降级**读 mock，不中断 |
+> | `True` | `False` | 强制走企客宝真实接口（推荐联调上线时用），失败则报错/空列表，不静默回 mock |
+>
+> 生产建议：联调阶段用 `True / False` 看清楚真实响应，确认字段映射后切回 `True / True`
+> 以获得「主数据源失败不崩」的兜底。凭证见 `QIKEBAO_CLIENT_ID / SECRET / CORP_ID`。
+
+### 飞书一键登录（OAuth）配置
+
+登录页「飞书一键登录」让销售子账号免密登录。启用步骤：
+
+1. 在飞书开放平台创建企业自建应用，开通 **网页应用** 能力；
+2. 在应用的「安全设置 → 重定向 URL」中注册回调地址：
+   **`<FEISHU_WEBAPP_URL>/#/feishu-oauth`**
+   （`FEISHU_WEBAPP_URL` 是易销网页应用的公网地址，即前端实际访问的域名，
+   注意它必须与浏览器当前访问地址同源，否则飞书授权会失败）；
+3. 把 `FEISHU_APP_ID` / `FEISHU_APP_SECRET` 填到 `config/.env`；
+4. 登录页勾选可用后，点「飞书一键登录」→ 跳飞书授权 → 授权成功后自动回调到
+   `#/feishu-oauth`，由前端 `handleFeishuOauthCallback()` 换取会话并登录。
+
+> 未配置 `FEISHU_APP_ID` 或前端不在 `FEISHU_WEBAPP_URL` 下访问时，登录页会隐藏该按钮，
+> 不影响超管（admin/123456）与普通账号登录。
+
 ### LLM 后端切换（Kimi / OpenAI 兼容）
 
 - **Kimi（默认）**: `LLM_PROVIDER=kimi` + `KIMI_API_KEY`。画像分析、销售画像、话术生成均走 Kimi K2.7 Code。

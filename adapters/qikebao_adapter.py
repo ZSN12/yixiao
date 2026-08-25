@@ -20,9 +20,10 @@ from __future__ import annotations
 import json
 import logging
 import sys
+import uuid
 from datetime import date
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
@@ -56,6 +57,16 @@ def map_customer(raw: Dict) -> Customer:
         | created_at             | create_time           | 当天日期   |
         | social_security_count  | social_security_count | None      |
 
+    ⚠️ owner_user_id → owner_sales_id 映射需核对 ID 体系:
+    企客宝返回的 owner_user_id 是企客宝侧的内部用户 ID(通常为数字/自增),
+    而易销的销售 ID 是飞书/种子数据里的字符串销售编号(如 "S001")。
+    若两者 ID 体系不一致, 直接透传会导致: 同步进来的客户 owner_sales_id
+    无法匹配任何现有销售, 从而在「销售只看自己客户」的权限过滤下被隐藏。
+    上线前请确认(二选一):
+      1) 企客宝 owner_user_id 本身就是易销的 Sxxx 编号 → 无需处理;
+      2) 否则需在此处做 ID 映射(如通过手机号/企客宝员工表换算出 Sxxx),
+         并在配置里补充映射表或查询逻辑。
+
     Args:
         raw: 企客宝客户原始 dict。
 
@@ -79,8 +90,10 @@ def map_customer(raw: Dict) -> Customer:
     else:
         create_time = create_time[:10]   # 对齐 YYYY-MM-DD
 
+    # raw_id 缺失时用 uuid 兜底, 避免多笔无 ID 记录映射成同一个 customer_id
+    # 导致画像分析/会话分组互相覆盖。
     return Customer(
-        customer_id=f"{_prefix()}{raw_id}" if raw_id else f"{_prefix()}UNKNOWN",
+        customer_id=f"{_prefix()}{raw_id}" if raw_id else f"{_prefix()}{uuid.uuid4().hex[:8]}",
         customer_name=name,
         industry=industry,
         city=city_str,
@@ -218,7 +231,6 @@ def run_qikebao_demo() -> Dict:
     Returns:
         dict: {"customer_count", "analyzed", "intention_stats", "data_source"}。
     """
-    from modules import data_loader
     from modules import profile_analyzer
 
     customers = load_customers_from_qikebao()

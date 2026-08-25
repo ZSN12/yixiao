@@ -17,15 +17,16 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import json
 import logging
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from modules import data_loader
+
+from .common import require_admin
 
 logger = logging.getLogger(__name__)
 
@@ -174,9 +175,11 @@ async def phone_call_webhook(
     }
 
 
-@router.get("/api/phone-reviews")
+@router.get("/api/phone-reviews", dependencies=[Depends(require_admin)])
 def list_phone_reviews(status: Optional[str] = None) -> Dict[str, Any]:
     """列电话录音角色复核记录(默认全部, 可按 status=pending/resolved 过滤)。
+
+    仅超级管理员可访问。
 
     Returns:
         dict: {reviews: [ ... ], count: int}。
@@ -185,9 +188,11 @@ def list_phone_reviews(status: Optional[str] = None) -> Dict[str, Any]:
     return {"reviews": reviews, "count": len(reviews)}
 
 
-@router.post("/api/phone-reviews/{review_id}/confirm")
+@router.post("/api/phone-reviews/{review_id}/confirm", dependencies=[Depends(require_admin)])
 def confirm_phone_review(review_id: int, body: RoleReviewConfirmRequest) -> Dict[str, Any]:
     """人工确认某条角色复核记录, 写入最终角色。
+
+    仅超级管理员可访问。
 
     Args:
         review_id: 复核记录主键。

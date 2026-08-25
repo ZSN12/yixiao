@@ -42,7 +42,7 @@ def isolated_env(tmp_path, monkeypatch):
     Returns:
         Path: pytest 临时目录(tmp_path), 内含 test_sales_agent.db。
     """
-    from modules import agent_memory, data_loader
+    from modules import agent_memory, data_loader, user_auth
 
     tmp_db = str(tmp_path / "test_sales_agent.db")
     # 数据库与外部依赖全部指向隔离/空配置(monkeypatch 测试结束自动还原)
@@ -64,6 +64,8 @@ def isolated_env(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "asr_provider", "mock")
     monkeypatch.setattr(settings, "phone_webhook_secret", "")
     # 初始化临时 SQLite: analysis_history(data_loader) + memory_store(agent_memory)
+    # 并写入种子管理员, 供 API 鉴权相关测试登录使用。
     data_loader.init_db()
     agent_memory.init_memory_db()
+    user_auth.ensure_seed_admin()
     return tmp_path

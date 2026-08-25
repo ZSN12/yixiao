@@ -13,8 +13,10 @@ Python 函数, 不接触 HTTP 细节。
     https://qkbdoc.yunshouzhi.net/doc-2155604        (概览)
     https://qkbdoc.yunshouzhi.net/api-419903231       (获取客户列表)
 
-字段名与请求/响应结构为「待核对」初版 —— 拿到真实响应后仅需微调本模块,
-不影响 adapter 与调用方。
+Token 请求体已按官方文档补 `scope=Y3.RepetitionFansRemind.WebApi`;
+客户列表端点已按官方文档改为 POST /rfr/api/ContactOpen/GetCustomerListAsync
+(原 GET /customer/list + snake_case 参数均不符)。其余租户/字段结构仍为
+「待核对」初版 —— 拿到真实响应后仅需微调本模块, 不影响 adapter 与调用方。
 """
 
 from __future__ import annotations
@@ -97,10 +99,12 @@ def get_access_token(force_refresh: bool = False) -> str:
         raise RuntimeError("企客宝凭证缺失(qikebao_client_id / qikebao_client_secret), 请在 config/.env 配置")
 
     url = s.qikebao_token_url.rstrip("/")
+    # scope 为企客宝(企微工具)平台分配的 WebApi 作用域, 缺失会被拒(403/400)
     payload = urllib.parse.urlencode({
         "grant_type": "client_credentials",
         "client_id": client_id,
         "client_secret": client_secret,
+        "scope": "Y3.RepetitionFansRemind.WebApi",
     }).encode("utf-8")
 
     req = urllib.request.Request(
@@ -112,7 +116,10 @@ def get_access_token(force_refresh: bool = False) -> str:
     with urllib.request.urlopen(req, context=_ssl_context(), timeout=_REQUEST_TIMEOUT) as resp:
         body = json.loads(resp.read().decode("utf-8"))
 
-    token = body.get("access_token") or body.get("token") or body.get("data", {}).get("access_token")
+    data = body.get("data")
+    token = body.get("access_token") or body.get("token") or (
+        data.get("access_token") if isinstance(data, dict) else None
+    )
     if not token:
         raise RuntimeError(f"企客宝 Token 响应缺少 access_token: {list(body.keys())}")
     expires_in = int(body.get("expires_in", 7200) or 7200)
@@ -196,16 +203,19 @@ def get_customer_list(
 
     Returns:
         dict: 原始响应(结构待核对, 通常含 data.list / data.total)。
+
+    NOTE(与官方文档核对后确认):
+    - 端点: POST /rfr/api/ContactOpen/GetCustomerListAsync (原 GET /customer/list 不符);
+    - 分页参数放 JSON body: page / pageSize / corpId(驼峰, 原 snake_case 不符)。
     """
     params = {
-        "corp_id": corp_id,
+        "corpId": corp_id,
         "page": page,
-        "page_size": page_size,
+        "pageSize": page_size,
     }
     params.update({k: v for k, v in filters.items() if v is not None})
-    query = urllib.parse.urlencode(params)
-    url = f"{_api_base()}/customer/list?{query}"
-    return _request_json("GET", url)
+    url = f"{_api_base()}/rfr/api/ContactOpen/GetCustomerListAsync"
+    return _request_json("POST", url, body=params)
 
 
 def get_all_customers(corp_id: str, page_size: int = 100) -> List[Dict]:
@@ -228,7 +238,11 @@ def get_all_customers(corp_id: str, page_size: int = 100) -> List[Dict]:
             break
         all_rows.extend(rows)
         total = data.get("total")
-        if total is not None and len(all_rows) >= int(total):
+        try:
+            total_count = int(total) if total is not None else None
+        except (TypeError, ValueError):
+            total_count = None
+        if total_count is not None and len(all_rows) >= total_count:
             break
         if len(rows) < page_size:
             break

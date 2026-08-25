@@ -41,9 +41,18 @@ def _phone_payload(**overrides) -> dict:
 
 
 @pytest.fixture
-def client():
-    """基于 api.app 的 TestClient(每测试独立)。"""
+def client(isolated_env):
+    """基于 api.app 的 TestClient(每测试独立; isolated_env 提供临时 DB + 种子 admin)。"""
     return TestClient(api.app)
+
+
+@pytest.fixture
+def admin_headers(client):
+    """登录种子管理员, 返回带 Bearer token 的请求头(复核接口需管理鉴权)。"""
+    resp = client.post("/api/login", json={"username": "admin", "password": "123456"})
+    assert resp.status_code == 200
+    token = resp.json()["token"]
+    return {"Authorization": f"Bearer {token}"}
 
 
 # ============================================================
@@ -129,7 +138,7 @@ def test_webhook_returns_record_and_resolution(client):
     assert data["needs_review"] is False
 
 
-def test_webhook_low_confidence_creates_review(client, isolated_env):
+def test_webhook_low_confidence_creates_review(client, admin_headers, isolated_env):
     """低置信度角色判定 → needs_review=True 且落库(可被 list 查到)。"""
     # 无元数据(direction/sales_id/mobile 全空) + 无特征词转写 → 低置信度
     payload = _phone_payload(
@@ -147,7 +156,7 @@ def test_webhook_low_confidence_creates_review(client, isolated_env):
     assert data["review_id"] is not None, "低置信度应落库并返回 review_id"
 
     # list 能查到这条 pending 记录
-    resp2 = client.get("/api/phone-reviews?status=pending")
+    resp2 = client.get("/api/phone-reviews?status=pending", headers=admin_headers)
     pending_ids = [r["call_id"] for r in resp2.json()["reviews"]]
     assert "CALL_LOW001" in pending_ids
 
@@ -157,7 +166,7 @@ def test_webhook_low_confidence_creates_review(client, isolated_env):
 # ============================================================
 
 
-def test_role_review_lifecycle(client, isolated_env):
+def test_role_review_lifecycle(client, admin_headers, isolated_env):
     """save → list → confirm 全链路。"""
     from modules import data_loader
 
@@ -170,31 +179,32 @@ def test_role_review_lifecycle(client, isolated_env):
     review_id = saved["id"]
 
     # list(默认全部)
-    resp = client.get("/api/phone-reviews")
+    resp = client.get("/api/phone-reviews", headers=admin_headers)
     assert resp.status_code == 200
     reviews = resp.json()["reviews"]
     assert any(r["id"] == review_id for r in reviews)
 
     # list(status=pending)
-    resp = client.get("/api/phone-reviews?status=pending")
+    resp = client.get("/api/phone-reviews?status=pending", headers=admin_headers)
     assert any(r["id"] == review_id for r in resp.json()["reviews"])
 
     # confirm
     resp = client.post(
         f"/api/phone-reviews/{review_id}/confirm",
         json={"resolved_roles": {"Speaker_0": "客户", "Speaker_1": "销售"}},
+        headers=admin_headers,
     )
     assert resp.status_code == 200
     assert resp.json()["resolved"] is True
 
     # 确认后 status=resolved, 不再出现在 pending
-    resp = client.get("/api/phone-reviews?status=pending")
+    resp = client.get("/api/phone-reviews?status=pending", headers=admin_headers)
     assert all(r["id"] != review_id for r in resp.json()["reviews"])
 
 
-def test_role_review_confirm_missing(client):
+def test_role_review_confirm_missing(client, admin_headers, isolated_env):
     """确认不存在的复核记录 → 404。"""
-    resp = client.post("/api/phone-reviews/999999/confirm", json={"resolved_roles": {"A": "销售"}})
+    resp = client.post("/api/phone-reviews/999999/confirm", json={"resolved_roles": {"A": "销售"}}, headers=admin_headers)
     assert resp.status_code == 404
 
 

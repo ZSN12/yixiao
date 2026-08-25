@@ -5,12 +5,14 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from modules import agent_memory, data_loader, follow_up_notes, lead_assigner, talk_track
 
-router = APIRouter(tags=["notes-talktrack-feedback"])
+from .common import require_admin, require_auth
+
+router = APIRouter(tags=["notes-talktrack-feedback"], dependencies=[Depends(require_auth)])
 
 
 class FeedbackRequest(BaseModel):
@@ -118,9 +120,11 @@ def get_talk_track(customer_id: str, track_type: str = "wechat", sales_id: str =
 # ============================================================
 
 
-@router.post("/feedback")
+@router.post("/feedback", dependencies=[Depends(require_admin)])
 def submit_feedback(req: FeedbackRequest) -> Dict[str, Any]:
     """人工复核反馈: 把该客户的记忆升级/新建为强记忆(影响后续分配)。
+
+    仅超级管理员可调用(涉及记忆强写入, 影响后续分配)。
 
     Args:
         req: FeedbackRequest {customer_id, correct_sales_id, note?}。
