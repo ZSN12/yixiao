@@ -37,7 +37,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from modules import data_source_registry  # noqa: E402
 from modules import user_auth  # noqa: E402
 
-from api_routes import auth, bitable, customers, data_sources, feishu, notes, phone_webhook, pipeline, sla, static  # noqa: E402
+from api_routes import auth, bitable, customers, data_sources, feishu, feishu_auth, notes, phone_webhook, pipeline, sla, static  # noqa: E402
 from api_routes.common import _global_exception_handler  # noqa: E402
 
 logger = logging.getLogger(__name__)
@@ -78,6 +78,7 @@ app.include_router(customers.router)
 app.include_router(notes.router)
 app.include_router(sla.router)
 app.include_router(feishu.router)
+app.include_router(feishu_auth.router)
 app.include_router(bitable.router)
 app.include_router(phone_webhook.router)
 app.include_router(static.router)

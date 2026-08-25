@@ -118,3 +118,62 @@ def test_sync_sales_open_ids(client, auth_headers, monkeypatch):
     assert data["synced_count"] >= 4
     # 确认真实数据文件未被改动（拦截了 save_sales）
     assert saved != []
+
+
+def test_feishu_oauth_url_endpoint(client, monkeypatch):
+    """飞书免登: 未配置 app_id 时 oauth-url 返回 enabled=False。"""
+    from modules import feishu_oauth
+    monkeypatch.setattr(feishu_oauth.settings, "feishu_app_id", "")
+    resp = client.get("/api/feishu/oauth-url")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data.get("enabled") is False
+    assert "reason" in data
+
+
+def test_feishu_oauth_login_sales(client, monkeypatch):
+    """飞书免登: 用 open_id 匹配到销售成员并签发 sales 会话。"""
+    from modules import feishu_oauth
+    monkeypatch.setattr(feishu_oauth.settings, "feishu_app_id", "cli_test")
+    monkeypatch.setattr(feishu_oauth.settings, "feishu_app_secret", "secret")
+    monkeypatch.setattr(feishu_oauth.settings, "feishu_webapp_url", "https://test.example.com")
+
+    # 构造一次性 state
+    st = feishu_oauth.build_authorize_url()["state"]
+    # mock 网络: open_id 命中 mock_sales 里的 S001(open_id=ou_5a3f22e10391fa12d541c1c033f29dd5)
+    monkeypatch.setattr(feishu_oauth, "_exchange_code_for_token", lambda code: "mock_token")
+    monkeypatch.setattr(
+        feishu_oauth,
+        "get_user_info_by_token",
+        lambda token: {"open_id": "ou_5a3f22e10391fa12d541c1c033f29dd5", "name": "张伟", "mobile": "15990070647"},
+    )
+
+    resp = client.post("/api/feishu/oauth-login", json={"code": "code_xyz", "state": st})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data.get("token")
+    assert data.get("role") == "sales"
+    assert data.get("sales_id") == "S001"
+    assert data.get("sales_mode") is True
+
+
+def test_feishu_oauth_login_unbound(client, monkeypatch):
+    """飞书免登: open_id 未匹配任何销售 -> 提示需绑定。"""
+    from modules import feishu_oauth
+    monkeypatch.setattr(feishu_oauth.settings, "feishu_app_id", "cli_test")
+    monkeypatch.setattr(feishu_oauth.settings, "feishu_app_secret", "secret")
+    monkeypatch.setattr(feishu_oauth.settings, "feishu_webapp_url", "https://test.example.com")
+
+    st = feishu_oauth.build_authorize_url()["state"]
+    monkeypatch.setattr(feishu_oauth, "_exchange_code_for_token", lambda code: "mock_token")
+    monkeypatch.setattr(
+        feishu_oauth,
+        "get_user_info_by_token",
+        lambda token: {"open_id": "ou_not_in_system", "name": "路人", "mobile": "19999999999"},
+    )
+
+    resp = client.post("/api/feishu/oauth-login", json={"code": "code_unbound", "state": st})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data.get("authenticated") is False
+    assert data.get("need_bind") is True

@@ -16,6 +16,7 @@
     // 登录态
     authenticated: false, authUser: null, authToken: "", authChecking: true,
     loginForm: { username: "", password: "" }, loggingIn: false,
+    feishuEnabled: false, feishuLogging: false,
     showUserMenu: false, logoutConfirm: false
   });
 
@@ -203,6 +204,60 @@
     persistAuth("", null);
     toast("已退出登录","info");
   }
+  function feishuLogin() {
+    if (store.feishuLogging) return;
+    store.feishuLogging = true;
+    return api("/api/feishu/oauth-url")
+      .then(function(d){
+        if (!d || !d.enabled) { toast((d&&d.reason)||"飞书登录未启用","error"); return; }
+        // 保存 state 用于回调校验
+        try { sessionStorage.setItem("yx_feishu_state", d.state||""); } catch(e){}
+        window.location.href = d.url;
+      })
+      .catch(function(e){ toast("获取飞书登录地址失败：" + e.message,"error"); })
+      .finally(function(){ store.feishuLogging = false; });
+  }
+  function handleFeishuOauthCallback() {
+    // 处理飞书授权回调: URL 形如 .../#/feishu-oauth?code=xxx&state=xxx
+    var p = new URLSearchParams(location.search);
+    var code = p.get("code") || "";
+    var state = p.get("state") || "";
+    var saved = "";
+    try { saved = sessionStorage.getItem("yx_feishu_state") || ""; } catch(e){}
+    if (!code || !state) return false;
+    // state 校验(宽松: 与下发的一致或未存时放行, 后端仍会强校验)
+    if (saved && state !== saved) { toast("授权状态校验失败","error"); return true; }
+    store.feishuLogging = true;
+    api("/api/feishu/oauth-login", {method:"POST", body:JSON.stringify({code:code, state:state})})
+      .then(function(d){
+        if (d && d.token) {
+          try { sessionStorage.removeItem("yx_feishu_state"); } catch(e){}
+          store.authChecking = false;
+          persistAuth(d.token, {username:d.username, role:d.role, display_name:d.display_name});
+          if (d.sales_mode && d.sales_id) {
+            store.currentSales = {sales_id:d.sales_id, name:d.sales_name||d.display_name};
+            store.salesMode = true;
+            store.route = "customers";
+          }
+          toast("飞书登录成功，欢迎 " + (d.display_name||""),"success");
+          // 清理回调参数
+          try { history.replaceState({}, "", location.pathname + "#/"); } catch(e){}
+          bootAfterAuth();
+        } else {
+          store.authChecking = false;
+          toast((d && d.reason) || "飞书登录失败，请先在销售团队中绑定该飞书账号","error");
+        }
+      })
+      .catch(function(e){ store.authChecking = false; toast("飞书登录失败：" + e.message,"error"); })
+      .finally(function(){ store.feishuLogging = false; });
+    return true;
+  }
+  function loadFeishuOauthState() {
+    // 登录页加载时探测飞书免登是否可用
+    api("/api/feishu/oauth-url").then(function(d){
+      store.feishuEnabled = !!(d && d.enabled);
+    }).catch(function(){ store.feishuEnabled = false; });
+  }
   function restoreAuth() {
     // 从 localStorage 恢复 token, 向后端校验有效性
     var token = "";
@@ -363,6 +418,11 @@
     + '          <button class="stage-submit-btn" @click="doLogin()" :disabled="loggingIn">'
     + '            <span v-if="loggingIn" class="btn-spinner"></span>'
     + '            <span v-text="loggingIn?\'正在鉴权…\':\'登 录\'"></span>'
+    + '          </button>'
+    + '          <div v-if="feishuEnabled" class="login-feishu-divider"><span>或</span></div>'
+    + '          <button class="feishu-login-btn" @click="feishuLogin()" :disabled="feishuLogging">'
+    + '            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 1 3 3c0 .3-.04.59-.12.86C17.14 5.3 19 7.1 19 9.3c0 .7-.18 1.36-.5 1.94.6.4 1 1.1 1 1.86 0 .4-.1.8-.28 1.13.8.3 1.4 1 1.4 1.87a2.3 2.3 0 0 1-2.3 2.3H7.3A3.3 3.3 0 0 1 4 15.3a3.3 3.3 0 0 1 1.5-2.77A3 3 0 0 1 5 12a2.8 2.8 0 0 1 .8-2 2.9 2.9 0 0 1 2.5-1.1c.4 0 .77.08 1.12.22.1-.6.35-1.15.72-1.6A3 3 0 0 1 12 2z"/></svg>'
+    + '            <span v-text="feishuLogging?\'正在跳转…\':\'飞书一键登录\'"></span>'
     + '          </button>'
     + '        </div>'
     + '        <div class="login-security-tag">'
@@ -1146,6 +1206,8 @@
       logoutConfirm: function(){return store.logoutConfirm;},
       loginForm: function(){return store.loginForm;},
       loggingIn: function(){return store.loggingIn;},
+      feishuEnabled: function(){return store.feishuEnabled;},
+      feishuLogging: function(){return store.feishuLogging;},
       pageTitle: function(){return{dashboard:"工作台",customers:"客户画像",assignments:"智能分配",team:"销售团队",memories:"记忆中心",sources:"数据接入"}[store.route]||"易销";}
     },
     methods: {
@@ -1153,6 +1215,7 @@
       refresh: function(){loadCustomers();loadSales();loadSummary();loadMemories();toast("已刷新","info");},
       run: runPipeline,
       doLogin: doLogin,
+      feishuLogin: feishuLogin,
       toggleUserMenu: function(){ store.showUserMenu = !store.showUserMenu; },
       requestLogout: function(){ store.showUserMenu = false; store.logoutConfirm = true; },
       cancelLogout: function(){ store.logoutConfirm = false; },
@@ -1194,10 +1257,18 @@
 
   api("/health").then(function(){store.health=true;}).catch(function(){store.health=false;toast("后端离线","error");});
   restoreAssignments();
+  // 飞书 OAuth 回调优先处理(在恢复登录态之前)
+  var oauthHandled = handleFeishuOauthCallback();
+  // 探测飞书免登是否可用(未登录时展示按钮)
+  loadFeishuOauthState();
   // 先恢复登录态, 已登录才加载主数据
-  restoreAuth().then(function(){
-    if (store.authenticated) {
-      bootAfterAuth();
-    }
-  });
+  if (!oauthHandled) {
+    restoreAuth().then(function(){
+      if (store.authenticated) {
+        bootAfterAuth();
+      }
+    });
+  } else {
+    // OAuth 回调处理中, 等其 .then 自行 bootAfterAuth
+  }
 })();

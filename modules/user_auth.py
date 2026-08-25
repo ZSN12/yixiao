@@ -147,6 +147,33 @@ def login(username: str, password: str) -> Optional[Dict[str, Any]]:
     }
 
 
+def issue_session(username: str, role: str, display_name: str) -> Dict[str, Any]:
+    """签发会话 token(供飞书免登等无密码登录路径复用)。
+
+    Args:
+        username: 会话主键(用户账号或销售工号)。
+        role: 角色(super_admin / sales / viewer)。
+        display_name: 展示名。
+
+    Returns:
+        dict: {token, username, role, display_name}。
+    """
+    token = secrets.token_hex(32)
+    _SESSIONS[token] = {
+        "username": username,
+        "role": role,
+        "display_name": display_name or username,
+        "expire_ts": time.time() + TOKEN_TTL_SECONDS,
+    }
+    logger.info("签发会话: %s(角色 %s)", username, role)
+    return {
+        "token": token,
+        "username": username,
+        "role": role,
+        "display_name": display_name or username,
+    }
+
+
 def logout(token: str) -> bool:
     """注销会话(清除 token)。"""
     token = (token or "").strip()

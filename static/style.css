@@ -1024,6 +1024,51 @@ body {
   flex: 0 0 auto;
 }
 
+/* 飞书一键登录 */
+.login-feishu-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0 12px;
+  color: #94a3b8;
+  font-size: 12px;
+}
+.login-feishu-divider::before,
+.login-feishu-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.12);
+}
+.feishu-login-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  height: 50px;
+  background: rgba(22, 101, 216, 0.12);
+  color: #7aa2f7;
+  border: 1px solid rgba(86, 156, 255, 0.35);
+  border-radius: 14px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.feishu-login-btn:hover {
+  background: rgba(22, 101, 216, 0.2);
+  border-color: rgba(86, 156, 255, 0.6);
+  transform: translateY(-2px);
+}
+.feishu-login-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+.feishu-login-btn svg { color: #5a9cf8; }
+
 /* 响应式适配 */
 @media (max-width: 900px) {
   .stage-container {
