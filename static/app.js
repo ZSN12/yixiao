@@ -659,16 +659,16 @@
     + '</td></tr></template></tbody></table></section></div>';
 
   var T_ASSIGN = '<div class="view-anim"><div class="toolbar">'
-    + '<div class="search-wrap"><span class="search-ico" v-html="ico.search"></span><input class="search-input" v-model="q" placeholder="搜索客户 / 销售 ID…"></div>'
+    + '<div class="search-wrap"><span class="search-ico" v-html="ico.search"></span><input class="search-input" v-model="q" placeholder="搜索客户 / 销售姓名…"></div>'
     + '<span class="toolbar-meta" v-if="hasData" v-text="\'共 \'+filtered.length+\' 条分配\'"></span></div>'
     + '<section class="card">'
     + '<div class="empty-hint" v-if="!hasData">暂无分配 — 点击右上角「运行今日流水线」生成推荐</div>'
     + '<table class="yx-table" v-if="hasData"><thead><tr><th>客户</th><th>意向</th><th>推荐销售</th><th>匹配理由</th><th>负载</th><th class="row-action">操作</th></tr></thead><tbody>'
     + '<tr v-for="a in filtered" :key="a.customer_id" :class="corr(a.customer_id)?\'row-corrected\':\'\'">'
-    + '<td><div><strong v-text="a.customer_name||a.customer_id"></strong><div class="sub" v-text="a.customer_id"></div></div></td>'
+    + '<td><strong v-text="a.customer_name||a.customer_id"></strong></td>'
     + '<td><span class="badge" :class="\'badge-int-\'+(a.intention_level||\'\')" v-text="a.intention_level||\'—\'"></span></td>'
     + '<td><strong v-text="a.sales_name||a.sales_id"></strong>'
-    + '<div v-if="corr(a.customer_id)" class="correction-tag" v-text="\'→ 已改派 \'+corr(a.customer_id)"></div></td>'
+    + '<div v-if="corr(a.customer_id)" class="correction-tag" v-text="\'→ 已改派 \'+corrName(a.customer_id)"></div></td>'
     + '<td class="reason-cell" v-text="a.match_reason||\'—\'"></td>'
     + '<td v-text="loadOf(a)+\' 单\'"></td>'
     + '<td class="row-action"><button class="btn btn-small" @click="openRe(a)">改派</button></td></tr>'
@@ -676,13 +676,12 @@
     + '<div class="modal-mask" v-if="rt" @click.self="rt=null">'
     + '<div class="modal"><h3>人工复核 · 改派</h3>'
     + '<p>客户 <strong v-text="rt.customer_name"></strong> 当前推荐 <strong v-text="rt.current_sales_name"></strong></p>'
-    + '<p class="muted">改派后将升级为强记忆, 影响后续分单。</p>'
-    + '<div class="modal-body"><label>改派给(销售 ID)</label>'
-    + '<input v-model="ri" class="search-input full" placeholder="如 S002">'
-    + '<div class="sales-quick"><button v-for="s in salesList" :key="s.sales_id" class="chip" '
-    + ':class="s.sales_id===ri?\'chip-on\':\'\'" @click="ri=s.sales_id" v-text="s.name+\' \'+s.sales_id"></button></div></div>'
+    + '<p class="muted">改派后将升级为强记忆, 参与后续相似客户分单决策。</p>'
+    + '<div class="modal-body"><label>选择改派给销售</label>'
+    + '<div class="sales-quick" style="margin-top:8px"><button v-for="s in salesList" :key="s.sales_id" class="chip" '
+    + ':class="s.sales_id===ri?\'chip-on\':\'\'" @click="ri=s.sales_id" v-text="s.name"></button></div></div>'
     + '<div class="modal-actions"><button class="btn btn-ghost" @click="rt=null">取消</button>'
-    + '<button class="btn btn-primary" @click="confirm()">确认改派</button></div></div></div></div>';
+    + '<button class="btn btn-primary" @click="confirm()" :disabled="!ri">确认改派</button></div></div></div></div>';
 
   var T_TEAM = '<div class="view-anim">'
     + '<div class="toolbar">'
@@ -1060,13 +1059,22 @@
     },
     methods: {
       corr: function(cid){return store.corrections[cid];},
+      corrName: function(cid){
+        var sid = store.corrections[cid];
+        if (!sid) return "";
+        var matched = (store.sales||[]).find(function(s){ return s.sales_id === sid; });
+        return matched ? matched.name : sid;
+      },
       loadOf: function(a){var s=(store.sales||[]).find(function(x){return x.sales_id===a.sales_id;});return s?s.current_load:0;},
       openRe: function(a){store.reassignTarget={customer_id:a.customer_id,customer_name:a.customer_name,current_sales_id:a.sales_id,current_sales_name:a.sales_name};this.ri="";},
       confirm: function(){
-        var t=this.ri.trim().toUpperCase();
-        if(!t){toast("请输入销售ID","error");return;}
+        var t = this.ri.trim();
+        if(!t){toast("请选择要改派的销售","error");return;}
         var self=this;
-        submitReassignment(store.reassignTarget.customer_id,t).then(function(){store.reassignTarget=null;self.ri="";});
+        submitReassignment(store.reassignTarget.customer_id, t).then(function(){
+          store.reassignTarget=null;
+          self.ri="";
+        });
       }
     }
   };
