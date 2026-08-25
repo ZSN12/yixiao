@@ -1895,12 +1895,177 @@ body {
 .ds-foot .btn-small { padding: 5px 8px; font-size: 11.5px; }
 .ds-foot .btn-small .btn-ico svg { width: 13px; height: 13px; }
 
-/* 数据源类型选择器 (弹窗内) */
-.ds-type-picker {
+/* ============================================================
+   大模型接入与管理卡片 (LLM Model Grid)
+   ============================================================ */
+.llm-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 18px;
+  margin-top: 10px;
+}
+.llm-card {
+  position: relative;
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.02);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+.llm-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(99,102,241,0.12);
+  border-color: #cbd5e1;
+}
+.llm-card.llm-active {
+  border-color: #6366f1;
+  background: linear-gradient(180deg, #fafaff 0%, #ffffff 100%);
+  box-shadow: 0 0 0 1px #6366f1, 0 8px 24px rgba(99,102,241,0.16);
+}
+.llm-active-badge-top {
+  position: absolute;
+  top: 0; right: 0;
+  background: linear-gradient(135deg, #4f46e5, #6366f1);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 14px 4px 12px;
+  border-bottom-left-radius: 12px;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  box-shadow: 0 2px 8px rgba(79,70,229,0.3);
+}
+.llm-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.llm-icon-box {
+  width: 44px; height: 44px;
+  border-radius: 12px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+  display: flex; align-items: center; justify-content: center;
+  flex: 0 0 auto;
+  font-weight: 800;
+  font-size: 16px;
+}
+.llm-icon-box.active {
+  background: linear-gradient(135deg, #eef2ff, #e0e7ff);
+  color: #4f46e5;
+  border-color: #c7d2fe;
+}
+.llm-header-info {
+  flex: 1;
+  min-width: 0;
+}
+.llm-name-row {
+  display: flex;
+  align-items: center;
   gap: 8px;
 }
+.llm-name {
+  font-size: 16px;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.2;
+}
+.llm-model-tag {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.llm-key-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.llm-key-badge.ok {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+.llm-key-badge.warn {
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+.llm-card-body {
+  background: #f8fafc;
+  border: 1px solid #f1f5f9;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.llm-body-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+}
+.llm-body-k {
+  color: #64748b;
+  font-weight: 600;
+  flex: 0 0 auto;
+}
+.llm-body-v {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  color: #334155;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  padding: 2px 8px;
+  border-radius: 6px;
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.llm-desc {
+  font-size: 12.5px;
+  color: #64748b;
+  line-height: 1.5;
+  margin-bottom: 16px;
+  min-height: 38px;
+}
+.llm-card-actions {
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.llm-action-primary {
+  flex: 1;
+}
+.llm-action-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .ds-type-opt {
   display: flex; align-items: center; gap: 8px;
   padding: 9px 10px;
