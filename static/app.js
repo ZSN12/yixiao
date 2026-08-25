@@ -697,7 +697,7 @@
     + '<div class="empty-hint" v-if="filtered.length===0">暂无匹配的销售人员</div>'
     + '<table class="yx-table" v-if="filtered.length>0"><thead><tr><th>销售成员</th><th>AI提炼擅长行业</th><th>负责城市</th><th>当前负载</th><th>飞书绑定(手机号)</th><th class="row-action">操作</th></tr></thead><tbody>'
     + '<tr v-for="s in filtered" :key="s.sales_id">'
-    + '<td><div><strong v-text="s.name"></strong><div class="sub" v-text="s.sales_id"></div></div></td>'
+    + '<td><strong v-text="s.name"></strong></td>'
     + '<td><div class="chip-group"><span v-for="ind in (s.good_at_industries||[])" :key="ind" class="badge badge-int-高" style="background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe" v-text="ind"></span><span v-if="!(s.good_at_industries&&s.good_at_industries.length)" class="muted">待AI扫描打标</span></div></td>'
     + '<td><div class="chip-group"><span v-for="city in (s.responsible_cities||[])" :key="city" class="badge" style="background:#f1f5f9;color:#475569" v-text="city"></span><span v-if="!(s.responsible_cities&&s.responsible_cities.length)" class="muted">全国通用</span></div></td>'
     + '<td><div style="display:flex;align-items:center;gap:8px"><div class="bar-track" style="width:80px;height:10px"><div class="bar-fill" :style="{width:Math.min(100, s.current_load*20)+\'%\', background:s.current_load>=5?\'#ef4444\':\'#4f46e5\'}"></div></div><strong v-text="s.current_load+\' 单\'"></strong></div></td>'
