@@ -6,13 +6,15 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from modules import bitable_sync
 
+from .common import require_admin
+
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["bitable"])
+router = APIRouter(tags=["bitable"], dependencies=[Depends(require_admin)])
 
 
 @router.post("/api/sync/bitable/pull")

@@ -10,13 +10,46 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from fastapi import HTTPException, Request
+from fastapi import Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from modules import data_loader  # noqa: E402
 from modules import sla_monitor  # noqa: E402
+from modules import user_auth  # noqa: E402
 
 logger = logging.getLogger(__name__)
+
+
+# ============================================================
+# 鉴权依赖: 除登录/回调/健康检查等公开接口外, 业务接口统一要求 Bearer token
+# ============================================================
+
+def require_auth(authorization: Optional[str] = Header(default=None)) -> Dict[str, Any]:
+    """校验请求头 Authorization: Bearer <token>, 无效/过期返回 401。
+
+    前端 static/app.js 登录后会在每个请求带 Authorization 头; 飞书卡片回调、
+    电话 webhook、移动端 open_id 入口不经过本依赖, 保持各自的身份识别方式。
+    """
+    token = (authorization or "").replace("Bearer ", "").strip()
+    session = user_auth.get_session(token)
+    if session is None:
+        raise HTTPException(status_code=401, detail="未登录或登录已过期, 请重新登录")
+    return session
+
+
+def require_admin(authorization: Optional[str] = Header(default=None)) -> Dict[str, Any]:
+    """管理级鉴权: 仅超级管理员(super_admin)可访问; 其他角色(销售等)返回 403。
+
+    用于管理类接口(销售团队 CRUD / 流水线运行 / 数据源管理 / 记忆 / 反馈等),
+    实现「总账号(admin) vs 子账号(销售)」的权限隔离。
+    """
+    session = require_auth(authorization)
+    if session.get("role") != "super_admin":
+        raise HTTPException(
+            status_code=403,
+            detail="当前账号无权限执行此操作，请联系超级管理员",
+        )
+    return session
 
 
 # ============================================================

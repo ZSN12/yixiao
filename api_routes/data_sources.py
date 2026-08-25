@@ -6,14 +6,16 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from modules import data_source_registry
 
+from .common import require_admin
+
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["data-sources"])
+router = APIRouter(tags=["data-sources"], dependencies=[Depends(require_admin)])
 
 
 class DataSourceCreateRequest(BaseModel):

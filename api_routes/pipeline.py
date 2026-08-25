@@ -7,20 +7,20 @@ import json
 import logging
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from config.settings import settings
 from modules import data_loader
 from orchestrator import language_graph_flow as lgf
 
-from .common import _serialize_assignments
+from .common import _customers_with_levels, _serialize_assignments, require_admin, require_auth
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["pipeline"])
 
 
-@router.post("/pipeline/run")
+@router.post("/pipeline/run", dependencies=[Depends(require_admin)])
 def run_pipeline() -> Dict[str, Any]:
     """手动触发一次完整流水线(加载 → 分析 → 分配 → 推送), 并把每个客户的分析
     结果快照实际写入 SQLite 的 analysis_history 表。
@@ -64,9 +64,12 @@ def run_pipeline() -> Dict[str, Any]:
         summary: Dict[str, Any] = dict(state.get("summary") or {})
         summary["saved_records"] = saved
         summary["meta"] = state.get("meta") or {}
-        # 数据源标识(企客宝为主数据源时 data_source=qikebao, 否则 mock/csv/企微兜底)
+        # 数据源标识: 以实际加载到的客户 ID 前缀为准(企客宝拉取失败时会
+        # 自动降级到 mock, 此时不能再标成 qikebao)。
         summary["data_source"] = (
-            "qikebao" if settings.qikebao_sync_enabled else "mock"
+            "qikebao"
+            if customers and customers[0].customer_id.startswith(settings.qikebao_customer_id_prefix)
+            else "mock"
         )
         # 附加分配明细(供运营看板「分配清单」渲染; 仅新增键, 不改变既有字段)
         summary["assignments"] = _serialize_assignments(state, analysis_results)
@@ -77,11 +80,17 @@ def run_pipeline() -> Dict[str, Any]:
 
 
 @router.get("/history/{customer_id}")
-def get_history(customer_id: str) -> Dict[str, Any]:
+def get_history(
+    customer_id: str,
+    _session: Dict[str, Any] = Depends(require_auth),
+) -> Dict[str, Any]:
     """查询某客户的画像分析历史(按 created_at 倒序)。
+
+    权限隔离: 销售角色仅可查看自己名下客户的历史; 超级管理员可看任意。
 
     Args:
         customer_id: 客户 ID(路径参数)。
+        _session: 登录会话(含 role / username)。
 
     Returns:
         dict: {"customer_id": ..., "records": [...]}。
@@ -89,8 +98,17 @@ def get_history(customer_id: str) -> Dict[str, Any]:
             created_at。
 
     Raises:
+        HTTPException(403): 销售角色访问非本人客户。
         HTTPException(404): 该客户无任何历史记录(带 detail 说明)。
     """
+    # 权限隔离: 销售只能看自己名下客户
+    if _session.get("role") != "super_admin":
+        from modules import data_loader as _dl
+        all_customers = _customers_with_levels()
+        mine_ids = {c.get("customer_id") for c in all_customers if c.get("owner_sales_id") == _session.get("username")}
+        if customer_id not in mine_ids:
+            raise HTTPException(status_code=403, detail="无权查看该客户的画像历史")
+
     data_loader.init_db()
     history: List[dict] = data_loader.get_analysis_history(customer_id)
     if not history:
@@ -101,7 +119,7 @@ def get_history(customer_id: str) -> Dict[str, Any]:
     return {"customer_id": customer_id, "records": history}
 
 
-@router.get("/pipeline/summary")
+@router.get("/pipeline/summary", dependencies=[Depends(require_admin)])
 def pipeline_summary() -> Dict[str, Any]:
     """「易销」平台: 最近一次流水线运行摘要。
 

@@ -5,11 +5,13 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from modules import data_loader, sla_monitor
 
-router = APIRouter(tags=["sla"])
+from .common import require_admin
+
+router = APIRouter(tags=["sla"], dependencies=[Depends(require_admin)])
 
 
 @router.get("/sla/status")

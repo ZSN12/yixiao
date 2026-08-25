@@ -276,7 +276,20 @@
   }
   function bootAfterAuth() {
     // 登录成功后加载主数据
+    // 权限隔离: 销售子账号(角色 sales)只加载自己客户 + 看板不加载管理类数据
+    var isSales = (store.authUser && store.authUser.role === "sales") || store.salesMode;
     loadCustomers();
+    if (isSales) {
+      // 销售视角: 用登录信息确定当前销售, 不调管理接口(/sales 等会 403)
+      if (!store.currentSales && store.authUser) {
+        store.currentSales = { sales_id: store.authUser.username, name: store.authUser.display_name };
+      }
+      store.salesMode = true;
+      store.route = "customers";
+      location.hash = "#/customers";
+      applyRoute(location.hash);
+      return;
+    }
     loadSales().then(function(){
       try {
         var p = new URLSearchParams(location.search);

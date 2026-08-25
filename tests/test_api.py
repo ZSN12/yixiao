@@ -177,3 +177,54 @@ def test_feishu_oauth_login_unbound(client, monkeypatch):
     data = resp.json()
     assert data.get("authenticated") is False
     assert data.get("need_bind") is True
+
+
+def test_sales_role_forbidden_admin_endpoints(client, auth_headers):
+    """权限隔离: 销售角色访问管理接口(/sales /pipeline/summary)返回 403。"""
+    from modules import user_auth
+    # 签发一个销售角色会话
+    sess = user_auth.issue_session("S001", "sales", "张伟")
+    sales_headers = {"Authorization": "Bearer " + sess["token"]}
+
+    # 管理接口 -> 403
+    resp = client.get("/sales", headers=sales_headers)
+    assert resp.status_code == 403
+
+    resp = client.get("/pipeline/summary", headers=sales_headers)
+    assert resp.status_code == 403
+
+    resp = client.get("/memories", headers=sales_headers)
+    assert resp.status_code == 403
+
+    resp = client.get("/api/data-sources", headers=sales_headers)
+    assert resp.status_code == 403
+
+
+def test_sales_role_only_own_customers(client, auth_headers):
+    """权限隔离: 销售角色 /customers 只返回自己名下客户; 访问他人 history 403。"""
+    from modules import user_auth
+    # 跑一次流水线产生历史, 用超管拿全量客户归属
+    client.post("/pipeline/run", headers=auth_headers)
+    admin_customers = client.get("/customers", headers=auth_headers).json()
+    # 找一个 S001 名下的客户
+    s001_customer = next((c for c in admin_customers if c.get("owner_sales_id") == "S001"), None)
+    assert s001_customer is not None
+
+    sess = user_auth.issue_session("S001", "sales", "张伟")
+    sales_headers = {"Authorization": "Bearer " + sess["token"]}
+
+    # 销售看到的客户全部归属 S001
+    mine = client.get("/customers", headers=sales_headers).json()
+    assert mine
+    assert all(c.get("owner_sales_id") == "S001" for c in mine)
+    assert s001_customer["customer_id"] in {c["customer_id"] for c in mine}
+
+    # 销售查看自己客户历史 OK
+    hist = client.get("/history/" + s001_customer["customer_id"], headers=sales_headers)
+    assert hist.status_code == 200
+
+    # 销售查看非本人客户历史(找一个非 S001 客户) -> 403
+    other = next((c for c in admin_customers if c.get("owner_sales_id") != "S001"), None)
+    if other:
+        h2 = client.get("/history/" + other["customer_id"], headers=sales_headers)
+        assert h2.status_code == 403

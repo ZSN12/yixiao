@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from modules import agent_memory, data_loader, sales_profile_engine
 
-from .common import _customers_with_levels, _find_sales_by_open_id, require_auth
+from .common import _customers_with_levels, _find_sales_by_open_id, require_admin, require_auth
 
 router = APIRouter(tags=["customers-sales"])
 
@@ -32,7 +32,7 @@ class SalesCreateRequest(BaseModel):
 # ============================================================
 
 
-@router.get("/memories", dependencies=[Depends(require_auth)])
+@router.get("/memories", dependencies=[Depends(require_admin)])
 def list_memories() -> List[Dict[str, Any]]:
     """列出系统最近学到的记忆(人工复核反馈), 供运营看板"学习效果回放"。
 
@@ -53,26 +53,30 @@ def list_memories() -> List[Dict[str, Any]]:
 # ============================================================
 
 
-@router.get("/customers", dependencies=[Depends(require_auth)])
+@router.get("/customers")
 def list_customers(
     intention: Optional[str] = None,   # 按意向等级筛选: 高/中/低
     churn: Optional[str] = None,       # 按流失风险筛选: 高/中/低
+    _session: Dict[str, Any] = Depends(require_auth),
 ) -> List[Dict[str, Any]]:
-    """「易销」平台: 返回全量客户列表(含意向/流失等级)。
+    """「易销」平台: 返回客户列表(含意向/流失等级)。
 
-    从 analysis_history 最新批次读取每个客户的意向/流失等级, join 到客户
-    基础资料上; 支持按 intention / churn 筛选(取值 高/中/低)。
+    权限隔离: 超级管理员返回全量; 销售角色仅返回其名下(owner_sales_id=当前销售工号)客户。
 
     Args:
         intention: 可选, 按意向等级过滤("高"/"中"/"低")。
         churn: 可选, 按流失风险过滤("高"/"中"/"低")。
+        _session: 登录会话(含 role / username)。
 
     Returns:
-        list[dict]: 每条含 customer_id / customer_name / industry / city /
-            scale / owner_sales_id / create_time / intention_level / churn_risk
-            (最新批次有分析结果时才有后两个字段, 否则为 None)。
+        list[dict]: 客户列表(销售角色仅含自己名下)。
     """
     result = _customers_with_levels()
+
+    # 权限隔离: 销售角色只可见自己名下客户
+    if _session.get("role") != "super_admin":
+        sid = _session.get("username") or ""
+        result = [x for x in result if x.get("owner_sales_id") == sid]
 
     # 筛选
     if intention:
@@ -88,7 +92,7 @@ def list_customers(
 # ============================================================
 
 
-@router.get("/sales", dependencies=[Depends(require_auth)])
+@router.get("/sales", dependencies=[Depends(require_admin)])
 def list_sales() -> List[Dict[str, Any]]:
     """「易销」平台: 返回销售人员列表。
 
@@ -100,7 +104,7 @@ def list_sales() -> List[Dict[str, Any]]:
     return [s.model_dump() if hasattr(s, "model_dump") else dict(s) for s in sales]
 
 
-@router.post("/sales", dependencies=[Depends(require_auth)])
+@router.post("/sales", dependencies=[Depends(require_admin)])
 def create_sales(req: SalesCreateRequest) -> Dict[str, Any]:
     """「易销」平台: 新增一名销售团队成员。"""
     try:
@@ -134,7 +138,7 @@ def create_sales(req: SalesCreateRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"新增员工失败: {exc}")
 
 
-@router.patch("/sales/{sales_id}", dependencies=[Depends(require_auth)])
+@router.patch("/sales/{sales_id}", dependencies=[Depends(require_admin)])
 def update_sales(sales_id: str, req: SalesCreateRequest) -> Dict[str, Any]:
     """「易销」平台: 更新一名销售成员的字段(按 sales_id 定位, 常用于绑定飞书 open_id)。"""
     try:
@@ -168,7 +172,7 @@ def update_sales(sales_id: str, req: SalesCreateRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"更新员工失败: {exc}")
 
 
-@router.delete("/sales/{sales_id}", dependencies=[Depends(require_auth)])
+@router.delete("/sales/{sales_id}", dependencies=[Depends(require_admin)])
 def delete_sales(sales_id: str) -> Dict[str, Any]:
     """「易销」平台: 删除一名销售团队成员。"""
     try:
@@ -184,7 +188,7 @@ def delete_sales(sales_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"删除员工失败: {exc}")
 
 
-@router.get("/sales/{sales_id}/profile", dependencies=[Depends(require_auth)])
+@router.get("/sales/{sales_id}/profile", dependencies=[Depends(require_admin)])
 def get_sales_profile(sales_id: str) -> Dict[str, Any]:
     """「易销」平台: 基于 CRM 历史成交数据，通过大模型生成销售能力画像。"""
     try:
@@ -196,7 +200,7 @@ def get_sales_profile(sales_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"生成销售画像失败: {exc}")
 
 
-@router.post("/sales/{sales_id}/sync-profile", dependencies=[Depends(require_auth)])
+@router.post("/sales/{sales_id}/sync-profile", dependencies=[Depends(require_admin)])
 def sync_sales_profile(sales_id: str) -> Dict[str, Any]:
     """「易销」平台: AI 分析销售成单历史并自动反哺更新其擅长行业与能力标签。"""
     try:
@@ -206,7 +210,7 @@ def sync_sales_profile(sales_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"同步销售画像失败: {exc}")
 
 
-@router.post("/sales/sync-all-profiles", dependencies=[Depends(require_auth)])
+@router.post("/sales/sync-all-profiles", dependencies=[Depends(require_admin)])
 def sync_all_sales_profiles() -> Dict[str, Any]:
     """「易销」平台: 全员一键 AI 扫描 CRM 成交记录并同步画像图谱。"""
     try:
@@ -216,7 +220,7 @@ def sync_all_sales_profiles() -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"批量同步销售画像失败: {exc}")
 
 
-@router.post("/sales/sync-open-ids", dependencies=[Depends(require_auth)])
+@router.post("/sales/sync-open-ids", dependencies=[Depends(require_admin)])
 def sync_sales_open_ids() -> Dict[str, Any]:
     """「易销」平台: 批量根据销售成员手机号通过飞书开放平台自动反查并绑定 open_id。"""
     try:
