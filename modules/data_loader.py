@@ -575,6 +575,86 @@ def fetch_wework_chat(customer_id: str, days: int = 30) -> List[ChatRecord]:
     return []
 
 
+def fetch_qikebao_customers() -> List[Customer]:
+    """从企客宝 OpenAPI 拉取客户列表(主数据源, 可选)。
+
+    - settings.qikebao_sync_enabled=False → 返回 [] (未启用);
+    - qikebao_mock_mode=True → 读 data/real/qikebao_customers_sample.json;
+    - 否则 → 调 adapters.qikebao_adapter.load_customers_from_qikebao();
+    - 任何异常记日志并返回 [], 不中断调用方。
+
+    Returns:
+        list[Customer]: 企客宝客户列表(已映射, customer_id 带 QKB- 前缀)。
+    """
+    try:
+        from config.settings import settings
+        if not settings.qikebao_sync_enabled:
+            return []
+        from adapters.qikebao_adapter import load_customers_from_qikebao
+        customers = load_customers_from_qikebao()
+        logger.info("fetch_qikebao_customers: 共 %d 家", len(customers))
+        return customers
+    except Exception as exc:  # noqa: BLE001 —— 企客宝不可用返回空, 降级 mock
+        logger.error("fetch_qikebao_customers 失败(%s), 返回空列表", exc)
+        return []
+
+
+def fetch_qikebao_chat(customer_ids: Optional[List[str]] = None) -> List[ChatRecord]:
+    """从企客宝拉取聊天记录(P1; 未开通会话存档返回空)。
+
+    Args:
+        customer_ids: 客户 ID 列表(可空, 空则按全量客户拉取)。
+
+    Returns:
+        list[ChatRecord]: 会话记录列表。
+    """
+    try:
+        from config.settings import settings
+        if not settings.qikebao_sync_enabled or not settings.qikebao_sync_chat:
+            return []
+        customers = fetch_qikebao_customers()
+        if customer_ids:
+            customers = [c for c in customers if c.customer_id in set(customer_ids)]
+        from adapters.qikebao_adapter import load_chat_map_from_qikebao
+        chat_map = load_chat_map_from_qikebao(customers)
+        records: List[ChatRecord] = []
+        for recs in chat_map.values():
+            records.extend(recs)
+        return records
+    except Exception as exc:  # noqa: BLE001
+        logger.error("fetch_qikebao_chat 失败(%s), 返回空列表", exc)
+        return []
+
+
+def load_pipeline_data() -> Tuple[List[Customer], List[ChatRecord], List[Sales], List[SalesExperience]]:
+    """按优先级加载流水线数据(供 main.py 与 pipeline.py 共用)。
+
+    优先级:
+        1. 企客宝已启用且返回了客户 → fetch_qikebao_customers + fetch_qikebao_chat;
+        2. 否则 → 现有 load_all() mock JSON。
+
+    sales / experiences 始终走 mock(销售主数据来自 HR, 不随 CRM 客户走)。
+    企客宝未启用或拉取失败时, 行为与现在完全一致(mock 跑通)。
+
+    Returns:
+        tuple[客户, 会话, 销售, 经验]: 四元组(与 load_all 相比多出经验)。
+    """
+    qikebao_customers = fetch_qikebao_customers()
+    if qikebao_customers:
+        # 企客宝优先: 客户来自企客宝, 会话来自企客宝(P1)或空
+        chat_records = fetch_qikebao_chat([c.customer_id for c in qikebao_customers])
+        sales = load_sales()
+        experiences = load_sales_experiences()
+        logger.info("流水线数据来源: qikebao(客户 %d 家, 会话 %d 条)",
+                    len(qikebao_customers), len(chat_records))
+        return qikebao_customers, chat_records, sales, experiences
+
+    customers, chat_records, sales = load_all()
+    experiences = load_sales_experiences()
+    logger.info("流水线数据来源: mock(客户 %d 家, 会话 %d 条)", len(customers), len(chat_records))
+    return customers, chat_records, sales, experiences
+
+
 DEALS_FILE: Path = DATA_DIR / "mock_crm_deals.json"
 
 

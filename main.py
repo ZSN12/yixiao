@@ -58,9 +58,8 @@ def run_pipeline(args: argparse.Namespace) -> Dict[str, Any]:
 
     # ---- 环节 0: 数据加载(独立兜底) ----
     try:
-        customers, records, sales = data_loader.load_all()
+        customers, records, sales, experiences = data_loader.load_pipeline_data()
         chat_map = data_loader.build_chat_map(records)
-        experiences = data_loader.load_sales_experiences()
         data_loader.init_db()   # 初始化 SQLite(分析历史落库; 失败只记日志)
         logger.info("数据加载完成: 客户 %d / 会话 %d / 销售 %d / 经验 %d",
                     len(customers), len(records), len(sales), len(experiences))

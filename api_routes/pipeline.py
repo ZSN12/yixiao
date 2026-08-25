@@ -9,6 +9,7 @@ from typing import Any, Dict, List
 
 from fastapi import APIRouter, HTTPException
 
+from config.settings import settings
 from modules import data_loader
 from orchestrator import language_graph_flow as lgf
 
@@ -35,9 +36,8 @@ def run_pipeline() -> Dict[str, Any]:
     """
     try:
         # ---- 数据加载 + 数据库初始化 ----
-        customers, records, sales = data_loader.load_all()
+        customers, records, sales, experiences = data_loader.load_pipeline_data()
         chat_map = data_loader.build_chat_map(records)
-        experiences = data_loader.load_sales_experiences()
         data_loader.init_db()
 
         # ---- 多智能体流水线(内部已降级兜底, 不抛) ----
@@ -64,6 +64,10 @@ def run_pipeline() -> Dict[str, Any]:
         summary: Dict[str, Any] = dict(state.get("summary") or {})
         summary["saved_records"] = saved
         summary["meta"] = state.get("meta") or {}
+        # 数据源标识(企客宝为主数据源时 data_source=qikebao, 否则 mock/csv/企微兜底)
+        summary["data_source"] = (
+            "qikebao" if settings.qikebao_sync_enabled else "mock"
+        )
         # 附加分配明细(供运营看板「分配清单」渲染; 仅新增键, 不改变既有字段)
         summary["assignments"] = _serialize_assignments(state, analysis_results)
         return summary

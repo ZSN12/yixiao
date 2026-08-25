@@ -163,7 +163,7 @@ sales-agent/
 - **飞书闭环**: 卡片接单 / 改派 / 录小记 AI 重估 / 破冰话术，全部原地更新卡片。
 - **SLA 守护**: 超时自动流转公海，预警/超时飞书卡片提醒销售。
 - **双向同步**: 飞书多维表格（Bitable）⇄ 易销 增量同步。
-- **数据源接入中心**: 5 类数据源（CSV / 企微会话 / CRM 接口 / 飞书多维表 / 自定义 Webhook）可增删改查，SQLite 持久化。
+- **数据源接入中心**: 7 类数据源（企客宝 CRM / CSV / 企微会话 / CRM 接口 / 飞书多维表 / 自定义 Webhook / 电话录音）可增删改查，SQLite 持久化；企客宝为主数据源，mock/CSV/企微兜底。
 - **确定性可复现**: mock 模式全规则引擎，意向分层（高/中/低）与流失分层完全确定，便于验收与回归。
 
 ---
@@ -201,6 +201,15 @@ sales-agent/
 | `EMBEDDING_API_BASE` | `embedding_api_base` | `""` | Embedding API 端点（可选，配置后走向量检索） |
 | `EMBEDDING_API_KEY` | `embedding_api_key` | `""` | Embedding API Key |
 | `EMBEDDING_MODEL` | `embedding_model` | `""` | Embedding 模型名 |
+| `QIKEBAO_CLIENT_ID` | `qikebao_client_id` | `""` | 企客宝应用 Client ID（主数据源） |
+| `QIKEBAO_CLIENT_SECRET` | `qikebao_client_secret` | `""` | 企客宝应用 Client Secret |
+| `QIKEBAO_CORP_ID` | `qikebao_corp_id` | `""` | 企客宝企业 ID（多企业时必填） |
+| `QIKEBAO_API_BASE` | `qikebao_api_base` | `""` | 企客宝 API 地址（空则运行时按文档默认） |
+| `QIKEBAO_TOKEN_URL` | `qikebao_token_url` | `https://sso.yunshouzhi.net/connect/token` | 企客宝 token 端点 |
+| `QIKEBAO_SYNC_ENABLED` | `qikebao_sync_enabled` | `False` | `True` 且凭证齐全时走企客宝 |
+| `QIKEBAO_MOCK_MODE` | `qikebao_mock_mode` | `True` | `True` 读 sample JSON，不调外网 |
+| `QIKEBAO_SYNC_CHAT` | `qikebao_sync_chat` | `False` | P1: 是否同步企客宝会话存档 |
+| `QIKEBAO_CUSTOMER_ID_PREFIX` | `qikebao_customer_id_prefix` | `QKB-` | 客户 ID 前缀，防与 mock 冲突 |
 
 ### LLM 后端切换（Kimi / OpenAI 兼容）
 
@@ -268,7 +277,9 @@ pytest 单测全量跑（mock 模式、临时 DB 隔离、不依赖真实 LLM/�
 
 **Q5: 怎么接真实 CRM？**
 
-`adapters/crm_data_adapter.py` 提供可运行实证：`load_customers_from_csv`（CRM 导出 CSV → `Customer`，脏数据兜底）、`load_chat_records_from_export`（企微会话存档 JSON → `ChatRecord`）。演示数据在 `data/real/`（`crm_customers.csv` + `wework_chat_export.json`）。同时，「数据接入」页提供了可配置的数据源中心（CSV / 企微会话 / CRM 接口 / 飞书多维表 / 自定义 Webhook 五类），可增删改查并持久化。
+**企客宝（主数据源，推荐）**：`adapters/qikebao_client.py`（`urllib` 零第三方 HTTP 客户端，含 token 缓存 + 401 自动刷新）+ `adapters/qikebao_adapter.py`（原始 dict → `Customer`/`ChatRecord` 字段映射）。在 `config/.env` 配置 `QIKEBAO_CLIENT_ID` / `QIKEBAO_CLIENT_SECRET` / `QIKEBAO_CORP_ID`，并设 `QIKEBAO_SYNC_ENABLED=true`（`QIKEBAO_MOCK_MODE=false`）即走真实企客宝；客户 ID 加 `QKB-` 前缀防与 mock `C001` 冲突。未启用时自动回退 mock/CSV/企微兜底，系统行为与原先一致。字段映射为初版（见 `map_customer` docstring），拿到真实响应后仅需微调 `qikebao_adapter.py`，调用方零改动。演示：`python adapters/qikebao_adapter.py`（mock 样例 `data/real/qikebao_customers_sample.json`）。
+
+`adapters/crm_data_adapter.py` 提供兜底实证：`load_customers_from_csv`（CRM 导出 CSV → `Customer`，脏数据兜底）、`load_chat_records_from_export`（企微会话存档 JSON → `ChatRecord`）。演示数据在 `data/real/`（`crm_customers.csv` + `wework_chat_export.json`）。同时，「数据接入」页提供了可配置的数据源中心（企客宝 CRM / CSV / 企微会话 / CRM 接口 / 飞书多维表 / 自定义 Webhook / 电话录音 七类），可增删改查并持久化。
 
 **Q6: 登录态是怎么持久化的？**
 

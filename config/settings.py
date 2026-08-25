@@ -67,6 +67,17 @@ class Settings(BaseSettings):
     phone_role_llm_fallback: bool = True  # Tier-3 是否启用 LLM 角色兜底
     phone_role_min_confidence: float = 0.7  # 低于此值打 review 标记
     phone_webhook_secret: str = ""  # 电话录音 webhook 签名密钥(空则跳过签名校验, 仅内网/演示用)
+    # 企客宝 OpenAPI(主数据源, 可选): 配置齐全 + qikebao_sync_enabled=True 时,
+    # 流水线客户数据优先来自企客宝, mock/CSV/企微保留兜底。
+    qikebao_client_id: str = ""
+    qikebao_client_secret: str = ""
+    qikebao_corp_id: str = ""                    # 企业 ID, 多企业时必填
+    qikebao_api_base: str = ""                   # 空则运行时按文档默认; 调不通再配
+    qikebao_token_url: str = "https://sso.yunshouzhi.net/connect/token"
+    qikebao_sync_enabled: bool = False           # True 且凭证齐全时走企客宝
+    qikebao_mock_mode: bool = True               # True 读 sample JSON, 不调外网
+    qikebao_sync_chat: bool = False              # P1: 是否同步会话存档
+    qikebao_customer_id_prefix: str = "QKB-"     # 客户 ID 前缀, 防与 mock 冲突
 
 
 settings = Settings()

@@ -78,6 +78,16 @@ SOURCE_TYPES: Dict[str, dict] = {
             {"key": "asr_provider", "label": "ASR 提供商", "placeholder": "mock|aliyun|tencent", "required": False},
         ],
     },
+    "qikebao": {
+        "label": "企客宝 CRM",
+        "icon": "building",
+        "desc": "对接企客宝 OpenAPI，作为客户主数据源（mock/CSV/企微兜底）",
+        "fields": [
+            {"key": "client_id", "label": "Client ID", "placeholder": "企客宝应用 client_id", "required": True},
+            {"key": "client_secret", "label": "Client Secret", "placeholder": "企客宝应用 client_secret", "required": True},
+            {"key": "corp_id", "label": "企业 corp_id", "placeholder": "企客宝租户 corp_id", "required": True},
+        ],
+    },
 }
 
 # 系统预置数据源(首次启动写入, 作为可编辑/可启停的起点)
@@ -87,6 +97,7 @@ BUILTIN_SOURCES: List[dict] = [
     {"name": "CRM 成交商机", "type": "crm", "config": {"api_base": "https://crm.example.com/api", "api_key": ""}, "enabled": True, "status": "预留", "builtin": True},
     {"name": "飞书多维表同步", "type": "bitable", "config": {"base_token": "", "leads_table": "tbluJCdsnsMaWYYD"}, "enabled": True, "status": "预留", "builtin": True},
     {"name": "电话录音(演示)", "type": "phone_call", "config": {"manifest_path": "data/real/phone_call_manifest.json", "asr_provider": "mock"}, "enabled": False, "status": "待接入", "builtin": True},
+    {"name": "企客宝 CRM", "type": "qikebao", "config": {"client_id": "", "client_secret": "", "corp_id": ""}, "enabled": False, "status": "待接入", "builtin": True},
 ]
 
 

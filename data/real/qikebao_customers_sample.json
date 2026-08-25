@@ -1,0 +1,56 @@
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "list": [
+      {
+        "id": "10001",
+        "corp_id": "corp_demo",
+        "name": "苏州博创智能装备有限公司",
+        "alias": "王总",
+        "industry": "智能制造",
+        "province": "江苏省",
+        "city": "苏州市",
+        "scale": "中大型",
+        "owner_user_id": "S001",
+        "owner_user_name": "张伟",
+        "social_security_count": "280",
+        "created_at": "2026-07-11 10:00:00",
+        "tags": ["重点客户", "制造业"]
+      },
+      {
+        "id": "10002",
+        "corp_id": "corp_demo",
+        "name": "杭州康泰医疗器械股份有限公司",
+        "alias": "李主任",
+        "industry": "医疗器械",
+        "province": "浙江省",
+        "city": "杭州市",
+        "scale": "大型",
+        "owner_user_id": "S001",
+        "owner_user_name": "张伟",
+        "social_security_count": "850",
+        "created_at": "2026-06-26 09:30:00",
+        "tags": ["医疗", "KA客户"]
+      },
+      {
+        "id": "10003",
+        "corp_id": "corp_demo",
+        "name": "深圳云启软件科技有限公司",
+        "alias": "陈经理",
+        "industry": "软件服务",
+        "province": "广东省",
+        "city": "深圳市",
+        "scale": "中型",
+        "owner_user_id": "",
+        "owner_user_name": "",
+        "social_security_count": "120",
+        "created_at": "2026-07-16 14:20:00",
+        "tags": ["软件"]
+      }
+    ],
+    "total": 3,
+    "page": 1,
+    "page_size": 100
+  }
+}
