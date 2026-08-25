@@ -102,12 +102,19 @@ def test_feedback_422_missing_field(client, auth_headers):
 
 
 def test_sync_sales_open_ids(client, auth_headers, monkeypatch):
-    """测试通过手机号批量同步飞书 open_id 接口。"""
+    """测试通过手机号批量同步飞书 open_id 接口（不污染真实 mock_sales.json）。"""
+    from modules import data_loader
     from modules import feishu_app_notifier
+    # 用 mock 反查结果 + 拦截落盘，避免测试写坏 data/mock_sales.json
     monkeypatch.setattr(feishu_app_notifier, "get_open_id_by_mobile", lambda mobile: f"ou_mock_{mobile}")
+    saved = []
+    monkeypatch.setattr(data_loader, "save_sales", lambda lst: saved.append(list(lst)))
     resp = client.post("/sales/sync-open-ids", headers=auth_headers)
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "ok"
     assert "synced_count" in data
     assert "details" in data
+    assert data["synced_count"] >= 4
+    # 确认真实数据文件未被改动（拦截了 save_sales）
+    assert saved != []
