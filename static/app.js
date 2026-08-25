@@ -588,43 +588,46 @@
     + '<div class="filter-bar">'
     + '<div class="filter-item">'
     + '<span class="filter-label">意向分层:</span>'
-    + '<div class="filter-select-wrap">'
-    + '<select class="filter-select" v-model="fInt">'
-    + '<option value="">全部意向</option>'
-    + '<option value="高">🔥 高意向</option>'
-    + '<option value="中">⚡ 中意向</option>'
-    + '<option value="低">🌱 低意向</option>'
-    + '</select>'
-    + '<svg class="filter-select-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>'
+    + '<div class="filter-dropdown" @click.stop>'
+    + '<div class="filter-trigger" :class="{\'open\': activeDropdown===\'int\', \'active-val\': !!fInt}" @click="toggleDropdown(\'int\')">'
+    + '<span class="filter-trigger-text" v-text="intLabel"></span>'
+    + '<svg class="filter-trigger-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>'
     + '</div>'
-    + '</div>'
+    + '<div class="filter-menu" v-if="activeDropdown===\'int\'">'
+    + '<div class="filter-option" :class="{\'selected\': fInt===\'\'}" @click="selectInt(\'\')"><span>全部意向</span><svg v-if="fInt===\'\'" class="filter-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>'
+    + '<div class="filter-option" :class="{\'selected\': fInt===\'高\'}" @click="selectInt(\'高\')"><span>🔥 高意向</span><svg v-if="fInt===\'高\'" class="filter-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>'
+    + '<div class="filter-option" :class="{\'selected\': fInt===\'中\'}" @click="selectInt(\'中\')"><span>⚡ 中意向</span><svg v-if="fInt===\'中\'" class="filter-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>'
+    + '<div class="filter-option" :class="{\'selected\': fInt===\'低\'}" @click="selectInt(\'低\')"><span>🌱 低意向</span><svg v-if="fInt===\'低\'" class="filter-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>'
+    + '</div></div></div>'
     + '<div class="filter-item">'
     + '<span class="filter-label">流失风险:</span>'
-    + '<div class="filter-select-wrap">'
-    + '<select class="filter-select" v-model="fChurn">'
-    + '<option value="">全部风险</option>'
-    + '<option value="高">⚠️ 高风险</option>'
-    + '<option value="中">⚡ 中风险</option>'
-    + '<option value="低">🛡️ 低风险</option>'
-    + '</select>'
-    + '<svg class="filter-select-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>'
+    + '<div class="filter-dropdown" @click.stop>'
+    + '<div class="filter-trigger" :class="{\'open\': activeDropdown===\'churn\', \'active-val\': !!fChurn}" @click="toggleDropdown(\'churn\')">'
+    + '<span class="filter-trigger-text" v-text="churnLabel"></span>'
+    + '<svg class="filter-trigger-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>'
     + '</div>'
-    + '</div>'
+    + '<div class="filter-menu" v-if="activeDropdown===\'churn\'">'
+    + '<div class="filter-option" :class="{\'selected\': fChurn===\'\'}" @click="selectChurn(\'\')"><span>全部风险</span><svg v-if="fChurn===\'\'" class="filter-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>'
+    + '<div class="filter-option" :class="{\'selected\': fChurn===\'高\'}" @click="selectChurn(\'高\')"><span>⚠️ 高风险</span><svg v-if="fChurn===\'高\'" class="filter-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>'
+    + '<div class="filter-option" :class="{\'selected\': fChurn===\'中\'}" @click="selectChurn(\'中\')"><span>⚡ 中风险</span><svg v-if="fChurn===\'中\'" class="filter-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>'
+    + '<div class="filter-option" :class="{\'selected\': fChurn===\'低\'}" @click="selectChurn(\'低\')"><span>🛡️ 低风险</span><svg v-if="fChurn===\'低\'" class="filter-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>'
+    + '</div></div></div>'
     + '<div class="filter-item">'
     + '<span class="filter-label">社保人数:</span>'
-    + '<div class="filter-select-wrap">'
-    + '<select class="filter-select" v-model="fSocial">'
-    + '<option value="">全部社保人数</option>'
-    + '<option value="lt100">100 人以下</option>'
-    + '<option value="100-499">100 - 499 人</option>'
-    + '<option value="500-999">500 - 999 人</option>'
-    + '<option value="gte1000">1000 人及以上</option>'
-    + '<option value="none">未填写 / 暂无</option>'
-    + '</select>'
-    + '<svg class="filter-select-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>'
+    + '<div class="filter-dropdown" @click.stop>'
+    + '<div class="filter-trigger" :class="{\'open\': activeDropdown===\'social\', \'active-val\': !!fSocial}" @click="toggleDropdown(\'social\')">'
+    + '<span class="filter-trigger-text" v-text="socialLabel"></span>'
+    + '<svg class="filter-trigger-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>'
     + '</div>'
-    + '</div>'
-    + '<button class="filter-reset-btn" v-if="fInt||\n      fChurn||fSocial" @click="fInt=\'\';fChurn=\'\';fSocial=\'\'">'
+    + '<div class="filter-menu" v-if="activeDropdown===\'social\'">'
+    + '<div class="filter-option" :class="{\'selected\': fSocial===\'\'}" @click="selectSocial(\'\')"><span>全部社保人数</span><svg v-if="fSocial===\'\'" class="filter-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>'
+    + '<div class="filter-option" :class="{\'selected\': fSocial===\'lt100\'}" @click="selectSocial(\'lt100\')"><span>100 人以下</span><svg v-if="fSocial===\'lt100\'" class="filter-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>'
+    + '<div class="filter-option" :class="{\'selected\': fSocial===\'100-499\'}" @click="selectSocial(\'100-499\')"><span>100 - 499 人</span><svg v-if="fSocial===\'100-499\'" class="filter-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>'
+    + '<div class="filter-option" :class="{\'selected\': fSocial===\'500-999\'}" @click="selectSocial(\'500-999\')"><span>500 - 999 人</span><svg v-if="fSocial===\'500-999\'" class="filter-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>'
+    + '<div class="filter-option" :class="{\'selected\': fSocial===\'gte1000\'}" @click="selectSocial(\'gte1000\')"><span>1000 人及以上</span><svg v-if="fSocial===\'gte1000\'" class="filter-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>'
+    + '<div class="filter-option" :class="{\'selected\': fSocial===\'none\'}" @click="selectSocial(\'none\')"><span>未填写 / 暂无</span><svg v-if="fSocial===\'none\'" class="filter-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>'
+    + '</div></div></div>'
+    + '<button class="filter-reset-btn" v-if="fInt||\n      fChurn||fSocial" @click="resetFilter()">'
     + '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg><span>重置筛选</span>'
     + '</button>'
     + '</div>'
@@ -930,12 +933,39 @@
 
   var C_Cust = {
     template: T_CUSTOMERS,
-    data: function(){return {expanded:"", fInt:"", fChurn:"", fSocial:"", onlyMine: true};},
+    data: function(){
+      return {
+        expanded: "",
+        fInt: "",
+        fChurn: "",
+        fSocial: "",
+        onlyMine: true,
+        activeDropdown: "" // "int" | "churn" | "social" | ""
+      };
+    },
     computed: {
       salesMode: function(){return store.salesMode;},
       currentSales: function(){return store.currentSales;},
       list: function(){return store.customers;},
       loading: function(){return store.loadingCustomers;},
+      intLabel: function(){
+        var map = { "高": "🔥 高意向", "中": "⚡ 中意向", "低": "🌱 低意向" };
+        return map[this.fInt] || "全部意向";
+      },
+      churnLabel: function(){
+        var map = { "高": "⚠️ 高风险", "中": "⚡ 中风险", "低": "🛡️ 低风险" };
+        return map[this.fChurn] || "全部风险";
+      },
+      socialLabel: function(){
+        var map = {
+          "lt100": "100 人以下",
+          "100-499": "100 - 499 人",
+          "500-999": "500 - 999 人",
+          "gte1000": "1000 人及以上",
+          "none": "未填写 / 暂无"
+        };
+        return map[this.fSocial] || "全部社保人数";
+      },
       myCount: function(){
         var sid = store.currentSales ? store.currentSales.sales_id : "";
         if (!sid) return 0;
@@ -977,7 +1007,36 @@
       profChurn: function(){return this.prof&&this.prof.result?this.prof.result.churn_risk:"";}
     },
     methods: {
-      toggle: function(c){var id=c.customer_id;this.expanded=this.expanded===id?"":id;if(this.expanded)loadProfile(id);}
+      toggle: function(c){var id=c.customer_id;this.expanded=this.expanded===id?"":id;if(this.expanded)loadProfile(id);},
+      toggleDropdown: function(name){
+        this.activeDropdown = this.activeDropdown === name ? "" : name;
+      },
+      selectInt: function(val){
+        this.fInt = val;
+        this.activeDropdown = "";
+      },
+      selectChurn: function(val){
+        this.fChurn = val;
+        this.activeDropdown = "";
+      },
+      selectSocial: function(val){
+        this.fSocial = val;
+        this.activeDropdown = "";
+      },
+      resetFilter: function(){
+        this.fInt = "";
+        this.fChurn = "";
+        this.fSocial = "";
+        this.activeDropdown = "";
+      }
+    },
+    mounted: function(){
+      var self = this;
+      this._closeDd = function(){ self.activeDropdown = ""; };
+      document.addEventListener("click", this._closeDd);
+    },
+    beforeUnmount: function(){
+      if (this._closeDd) document.removeEventListener("click", this._closeDd);
     }
   };
 
