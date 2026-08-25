@@ -231,12 +231,13 @@ body {
 }
 
 .yx-sidebar-foot {
-  padding: 16px 20px;
+  padding: 12px 14px;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
   display: flex;
   align-items: center;
   font-size: 12px;
   background: rgba(0, 0, 0, 0.2);
+  position: relative;
 }
 .health-chip {
   display: inline-flex;
@@ -265,15 +266,16 @@ body {
 
 /* ---- 登录账号 用户模块 (左侧栏底部, 可点击弹出用户菜单) ---- */
 .user-module {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 10px;
   background: rgba(255, 255, 255, 0.06);
-  padding: 5px 14px 5px 5px;
+  padding: 6px 12px 6px 6px;
   border-radius: 999px;
   color: #e2e8f0;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
   cursor: pointer;
   transition: all 0.18s ease;
   position: relative;
@@ -283,7 +285,7 @@ body {
   border-color: rgba(139, 92, 246, 0.4);
 }
 .auth-avatar {
-  width: 26px; height: 26px; border-radius: 50%;
+  width: 28px; height: 28px; border-radius: 50%;
   background: linear-gradient(135deg, #8b5cf6, #6366f1);
   color: #fff; font-weight: 700; font-size: 12px;
   display: flex; align-items: center; justify-content: center;
@@ -291,7 +293,7 @@ body {
 }
 .auth-avatar.lg { width: 38px; height: 38px; font-size: 16px; }
 .auth-name {
-  font-weight: 600; font-size: 12px; color: #f1f5f9;
+  font-weight: 600; font-size: 12.5px; color: #f1f5f9;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   flex: 1;
 }
@@ -302,46 +304,49 @@ body {
   transition: transform 0.2s ease;
 }
 
-/* 用户下拉菜单 */
+/* 用户下拉菜单: 贴合侧边栏内部, 左右 12px 留白, 绝不穿模溢出 */
 .user-menu {
-  position: fixed;
-  left: 16px;
-  bottom: 64px;
-  width: 230px;
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 66px;
+  width: auto;
+  box-sizing: border-box;
   background: #0f172a;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 16px;
-  padding: 12px;
-  box-shadow: 0 24px 50px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  padding: 10px;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1);
   z-index: 200;
 }
 .user-menu-head {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 6px 6px 10px;
+  gap: 10px;
+  padding: 6px 6px 8px;
 }
 .user-menu-id { display: flex; flex-direction: column; min-width: 0; }
-.user-menu-id strong { font-size: 14px; color: #f8fafc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.user-menu-id span { font-size: 11.5px; color: #94a3b8; margin-top: 2px; }
+.user-menu-id strong { font-size: 13.5px; color: #f8fafc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.user-menu-id span { font-size: 11px; color: #94a3b8; margin-top: 2px; }
 .user-menu-sep { height: 1px; background: rgba(255, 255, 255, 0.08); margin: 4px 0 6px; }
 .user-menu-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
-  padding: 10px 12px;
+  box-sizing: border-box;
+  padding: 8px 10px;
   background: transparent;
   border: none;
-  border-radius: 10px;
+  border-radius: 8px;
   color: #fca5a5;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s;
   text-align: left;
 }
-.user-menu-item svg { width: 16px; height: 16px; flex: 0 0 auto; }
+.user-menu-item svg { width: 15px; height: 15px; flex: 0 0 auto; }
 .user-menu-item:hover { background: rgba(239, 68, 68, 0.18); color: #fecaca; }
 
 /* 用户菜单弹出动画 */

@@ -35,6 +35,14 @@
     if (opts.body && !opts.headers["Content-Type"]) opts.headers["Content-Type"] = "application/json";
     return fetch(url, opts).then(function(r) {
       return r.json().catch(function(){return{};}).then(function(d) {
+        if (r.status === 401) {
+          try { localStorage.removeItem("yx_auth_token"); } catch(e) {}
+          store.authToken = "";
+          store.authenticated = false;
+          store.authUser = null;
+          store.authChecking = false;
+          throw new Error(d && d.detail ? d.detail : "登录已过期, 请重新登录");
+        }
         if (!r.ok) throw new Error(d && d.detail ? d.detail : "HTTP " + r.status);
         return d;
       });
@@ -390,6 +398,7 @@
     + '<div class="user-module" @click="toggleUserMenu()">'
     + '<span class="auth-avatar" v-text="authUser?(authUser.display_name||authUser.username).slice(0,1):\'?\'"></span>'
     + '<span class="auth-name" v-text="authUser?(authUser.display_name||authUser.username):\'未登录\'"></span>'
+    + '<svg class="user-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" :style="showUserMenu?\'transform:rotate(180deg)\':\'\'"><polyline points="6 9 12 15 18 9"/></svg>'
     + '</div>'
     + '</div>'
     + '<transition name="user-pop">'
