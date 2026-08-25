@@ -299,8 +299,8 @@ def _resolve_by_llm(
             roles = {sp: str(result.get(sp, "")) for sp in speakers if result.get(sp) in ("销售", "客户")}
             if len(roles) == len(speakers) and all(roles.values()):
                 return RoleResolution(
-                    speaker_roles=roles, method="llm", confidence=0.8,
-                    notes="LLM 语义判定角色",
+                    speaker_roles=roles, method="llm", confidence=0.7,
+                    notes="LLM 语义判定角色(兜底, 置信度低于元数据/规则判定)",
                 )
     except Exception as exc:  # noqa: BLE001 —— LLM 失败不抛, 降级
         logger.warning("LLM 角色判定失败(%s), 降级启发式", exc)

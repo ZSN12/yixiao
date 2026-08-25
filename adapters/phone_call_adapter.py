@@ -72,7 +72,14 @@ def load_chat_from_call(manifest: Dict) -> Tuple[ChatRecord, RoleResolution]:
     if provider == "mock" or not audio:
         segments = load_mock_transcript(transcript_demo_id)
     else:
-        segments = transcribe(audio, provider=provider)
+        try:
+            segments = transcribe(audio, provider=provider)
+        except Exception as exc:  # noqa: BLE001 —— ASR 失败不崩, 降级 mock 转写
+            logger.warning(
+                "真实 ASR(%s) 转写失败(%s), 降级 mock 演示转写(call_id=%s)",
+                provider, exc, call_id,
+            )
+            segments = load_mock_transcript(transcript_demo_id)
 
     # 2. 角色判定
     resolution = resolve(segments, manifest)

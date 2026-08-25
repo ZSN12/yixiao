@@ -112,6 +112,28 @@ class AnalysisHistory(Base):
     created_at: Mapped[str] = mapped_column(String(32))   # ISO 时间字符串
 
 
+class RoleReview(Base):
+    """电话录音角色判定复核表: 低置信度的说话人角色判定, 待人工确认。
+
+    当 speaker_role_resolver 判定 confidence < phone_role_min_confidence 时,
+    该通话的角色映射落库待复核; 人工确认后 status 置为 resolved。
+    """
+
+    __tablename__ = "role_review"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    call_id: Mapped[str] = mapped_column(String(64), index=True)
+    customer_id: Mapped[str] = mapped_column(String(64), default="")
+    speaker_roles: Mapped[str] = mapped_column(Text)       # 当前判定 {"Speaker_0": "销售", ...}
+    method: Mapped[str] = mapped_column(String(16), default="")   # metadata/heuristic/llm/manual
+    confidence: Mapped[str] = mapped_column(String(16), default="")  # 置信度(字符串, 保留小数)
+    notes: Mapped[str] = mapped_column(Text, default="")    # 判定依据
+    transcript: Mapped[str] = mapped_column(Text, default="")  # 分段转写快照(供人工判断)
+    status: Mapped[str] = mapped_column(String(16), default="pending")  # pending/resolved
+    resolved_roles: Mapped[str] = mapped_column(Text, default="")  # 人工确认后的最终角色
+    created_at: Mapped[str] = mapped_column(String(32))    # ISO 时间字符串
+
+
 # 全局数据库引擎与会话工厂(init_db 时初始化)
 _engine = None
 _SessionLocal = None
@@ -617,3 +639,139 @@ def generate_sales_experiences(deal_records: List[dict]) -> List[SalesExperience
     except Exception as exc:  # noqa: BLE001 —— 提炼失败不允许让上层崩溃
         logger.error("生成销售经验片段失败: %s", exc)
         return []
+
+
+# ============================================================
+# 电话录音角色判定复核(RoleReview)持久化
+# ============================================================
+
+
+def save_role_review(
+    call_id: str,
+    customer_id: str,
+    speaker_roles: Dict[str, str],
+    method: str,
+    confidence: float,
+    notes: str = "",
+    transcript: str = "",
+) -> Optional[Dict]:
+    """落库一条待人工复核的角色判定记录。
+
+    Args:
+        call_id: 通话 ID。
+        customer_id: 客户 ID。
+        speaker_roles: 当前判定 {"Speaker_0": "销售", ...}。
+        method: 判定方法 metadata/heuristic/llm/manual。
+        confidence: 判定置信度 0~1。
+        notes: 判定依据。
+        transcript: 分段转写快照(供人工判断)。
+
+    Returns:
+        dict | None: 保存成功返回行字典, 失败返回 None。
+    """
+    try:
+        init_db()
+        session = _get_session()
+        if session is None:
+            logger.warning("数据库不可用, 跳过保存角色复核记录")
+            return None
+        from datetime import datetime
+        review = RoleReview(
+            call_id=call_id,
+            customer_id=customer_id,
+            speaker_roles=json.dumps(speaker_roles, ensure_ascii=False),
+            method=method,
+            confidence=f"{confidence:.2f}",
+            notes=notes,
+            transcript=transcript,
+            status="pending",
+            resolved_roles="",
+            created_at=datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+        )
+        session.add(review)
+        session.commit()
+        session.refresh(review)
+        result = {
+            "id": review.id, "call_id": review.call_id, "customer_id": review.customer_id,
+            "speaker_roles": speaker_roles, "method": review.method,
+            "confidence": confidence, "notes": review.notes,
+            "transcript": review.transcript, "status": review.status,
+            "created_at": review.created_at,
+        }
+        session.close()
+        logger.info("已保存角色复核记录: call=%s, method=%s, conf=%.2f",
+                    call_id, method, confidence)
+        return result
+    except Exception as exc:  # noqa: BLE001
+        logger.error("保存角色复核记录失败(%s): %s", call_id, exc)
+        return None
+
+
+def list_role_reviews(status: Optional[str] = None, limit: int = 100) -> List[Dict]:
+    """查询角色复核记录列表(可按状态过滤, 按时间倒序)。
+
+    Args:
+        status: 状态过滤 pending/resolved; None 返回全部。
+        limit: 最多返回条数。
+
+    Returns:
+        list[dict]: 复核记录列表。
+    """
+    try:
+        init_db()
+        session = _get_session()
+        if session is None:
+            return []
+        q = session.query(RoleReview)
+        if status:
+            q = q.filter(RoleReview.status == status)
+        rows = q.order_by(RoleReview.id.desc()).limit(limit).all()
+        result = []
+        for r in rows:
+            try:
+                roles = json.loads(r.speaker_roles or "{}")
+            except (json.JSONDecodeError, TypeError):
+                roles = {}
+            result.append({
+                "id": r.id, "call_id": r.call_id, "customer_id": r.customer_id,
+                "speaker_roles": roles, "method": r.method,
+                "confidence": float(r.confidence or 0), "notes": r.notes,
+                "transcript": r.transcript, "status": r.status,
+                "resolved_roles": (json.loads(r.resolved_roles) if r.resolved_roles else {}),
+                "created_at": r.created_at,
+            })
+        session.close()
+        return result
+    except Exception as exc:  # noqa: BLE001
+        logger.error("查询角色复核记录失败: %s", exc)
+        return []
+
+
+def resolve_role_review(review_id: int, resolved_roles: Dict[str, str]) -> bool:
+    """人工确认某条复核记录, 写入最终角色并置为 resolved。
+
+    Args:
+        review_id: 复核记录主键。
+        resolved_roles: 人工确认的最终角色 {"Speaker_0": "销售", ...}。
+
+    Returns:
+        bool: 成功 True, 失败 False。
+    """
+    try:
+        init_db()
+        session = _get_session()
+        if session is None:
+            return False
+        row = session.query(RoleReview).filter(RoleReview.id == review_id).first()
+        if row is None:
+            session.close()
+            return False
+        row.resolved_roles = json.dumps(resolved_roles, ensure_ascii=False)
+        row.status = "resolved"
+        session.commit()
+        session.close()
+        logger.info("角色复核已确认: review_id=%d, roles=%s", review_id, resolved_roles)
+        return True
+    except Exception as exc:  # noqa: BLE001
+        logger.error("确认角色复核失败(%d): %s", review_id, exc)
+        return False

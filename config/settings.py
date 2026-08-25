@@ -66,6 +66,7 @@ class Settings(BaseSettings):
     asr_timeout: float = 120.0
     phone_role_llm_fallback: bool = True  # Tier-3 是否启用 LLM 角色兜底
     phone_role_min_confidence: float = 0.7  # 低于此值打 review 标记
+    phone_webhook_secret: str = ""  # 电话录音 webhook 签名密钥(空则跳过签名校验, 仅内网/演示用)
 
 
 settings = Settings()

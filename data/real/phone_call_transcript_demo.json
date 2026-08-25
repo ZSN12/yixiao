@@ -5,5 +5,10 @@
     {"speaker": "Speaker_0", "text": "没问题，我们可以按年度框架合同来谈，报价我这边再优化一下，时间上完全配合您的采购计划。", "start_ms": 19000, "end_ms": 27000, "confidence": 0.97},
     {"speaker": "Speaker_1", "text": "行，价格能谈下来就行，我们这边预算充足，希望尽快推进。", "start_ms": 28000, "end_ms": 33000, "confidence": 0.96},
     {"speaker": "Speaker_0", "text": "好的王总，那我把最终报价单明天发您，后续跟进我随时跟您汇报。", "start_ms": 34000, "end_ms": 40000, "confidence": 0.98}
+  ],
+  "CALL_LOW001": [
+    {"speaker": "Speaker_0", "text": "嗯。", "start_ms": 0, "end_ms": 1000, "confidence": 0.9},
+    {"speaker": "Speaker_1", "text": "哦。", "start_ms": 1500, "end_ms": 2500, "confidence": 0.9},
+    {"speaker": "Speaker_0", "text": "行。", "start_ms": 3000, "end_ms": 4000, "confidence": 0.9}
   ]
 }
