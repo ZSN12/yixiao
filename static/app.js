@@ -581,6 +581,7 @@
     + '<div class="toolbar">'
     + '<div class="search-wrap"><span class="search-ico" v-html="ico.search"></span><input class="search-input" v-model="q" placeholder="搜索销售姓名 / 工号 / 城市…"></div>'
     + '<div style="flex:1"></div>'
+    + '<button class="btn btn-ghost" @click="syncOpenIds()" :disabled="syncingOpenIds" style="color:#047857;border-color:#a7f3d0;background:#ecfdf5"><span class="btn-ico" v-html="ico.userPlus"></span><span v-text="syncingOpenIds?\'正在查询飞书…\':\'按手机号同步飞书\'"></span></button>'
     + '<button class="btn btn-ghost" @click="syncAll()" :disabled="syncingAll"><span class="btn-ico" v-html="ico.sync"></span><span v-text="syncingAll?\'正在扫描CRM商机…\':\'全员AI成单扫描\'"></span></button>'
     + '<button class="btn btn-primary" @click="openAddModal()"><span class="btn-ico" v-html="ico.userPlus"></span>添加销售员工</button>'
     + '</div>'
@@ -856,6 +857,7 @@
         curSales: {},
         syncingSingle: false,
         syncingAll: false,
+        syncingOpenIds: false,
         bindModal: null,
         bindSales: {},
         bindOpenIdVal: ""
@@ -879,6 +881,19 @@
       openAddModal: function(){
         this.form = { sales_id: "S00" + (this.list.length + 1), name: "", industries_str: "", cities_str: "", mobile: "15990070647", open_id: "" };
         this.showModal = true;
+      },
+      syncOpenIds: function(){
+        var self = this;
+        this.syncingOpenIds = true;
+        api("/sales/sync-open-ids", {method:"POST"})
+          .then(function(res){
+            return loadSales().then(function(){
+              var cnt = res && res.synced_count !== undefined ? res.synced_count : 0;
+              toast("飞书账号同步完成，已成功绑定/更新 " + cnt + " 名销售的 open_id", "success");
+            });
+          })
+          .catch(function(e){ toast("同步飞书账号失败: " + e.message, "error"); })
+          .finally(function(){ self.syncingOpenIds = false; });
       },
       bindOpenId: function(s){
         this.bindSales = s;
