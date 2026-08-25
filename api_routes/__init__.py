@@ -10,6 +10,7 @@
 - notes.py        : 跟进小记 / AI 话术 / 人工复核反馈。
 - sla.py          : SLA 超时预警 + 自动流转公海。
 - feishu.py       : 飞书卡片按钮交互回调。
+- llm_config.py   : 大模型配置 CRUD(超管可添加/切换 DeepSeek/Kimi/MiMo 等)。
 - phone_webhook.py: 电话录音 webhook 回调 + 低置信度角色复核。
 - static.py       : 静态资源托管 + 根路由 + 健康检查。
 """

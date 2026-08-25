@@ -13,6 +13,7 @@
     loadingProfile: "", reassignTarget: null, corrections: {},
     currentSales: null, salesMode: false,
     dataSources: [], loadingSources: false, sourceTypes: {},
+    llmConfigs: [], loadingLlmConfigs: false, llmTemplates: [],
     // 登录态
     authenticated: false, authUser: null, authToken: "", authChecking: true,
     loginForm: { username: "", password: "" }, loggingIn: false,
@@ -78,7 +79,8 @@
     check: SVG_OPEN + '<circle cx="12" cy="12" r="9"/><path d="m8.5 12.3 2.4 2.4 4.6-5"/></svg>',
     search: SVG_OPEN + '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>',
     sparkles: SVG_OPEN + '<path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3z"/></svg>',
-    sync: SVG_OPEN + '<path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>'
+    sync: SVG_OPEN + '<path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>',
+    models: SVG_OPEN + '<path d="M9.5 2a2.5 2.5 0 0 0-2.5 2.5v1A2.5 2.5 0 0 0 4.5 8H3a1 1 0 0 0 0 2h1.5a2.5 2.5 0 0 0 2.5 2.5h1A2.5 2.5 0 0 0 10.5 10H18a3 3 0 0 0 3-3V6a3 3 0 0 0-3-3h-8.5z"/><path d="M14.5 21.5a2.5 2.5 0 0 0 2.5-2.5v-1a2.5 2.5 0 0 0 2.5-2.5H21a1 1 0 0 0 0-2h-1.5a2.5 2.5 0 0 0-2.5-2.5h-1a2.5 2.5 0 0 0-2.5 2.5H6a3 3 0 0 0-3 3v1a3 3 0 0 0 3 3h8.5z"/></svg>'
   };
 
   /* ---- 数据加载 ---- */
@@ -116,6 +118,16 @@
     }).catch(function(e){toast("加载数据源失败:"+e.message,"error");store.dataSources=[];})
       .finally(function(){store.loadingSources=false;});
   }
+  function loadLlmConfigs() {
+    store.loadingLlmConfigs = true;
+    return api("/api/llm-configs").then(function(d){
+      store.llmConfigs = d.configs || [];
+      return api("/api/llm-configs/templates").then(function(t){
+        store.llmTemplates = t.templates || [];
+      });
+    }).catch(function(e){toast("加载模型配置失败:"+e.message,"error");store.llmConfigs=[];})
+      .finally(function(){store.loadingLlmConfigs=false;});
+  }
   function addDataSource(payload) {
     return api("/api/data-sources", {method:"POST", body:JSON.stringify(payload)})
       .then(function(){ return loadDataSources(); });
@@ -127,6 +139,25 @@
   function deleteDataSource(id) {
     return api("/api/data-sources/"+id, {method:"DELETE"})
       .then(function(){ return loadDataSources(); });
+  }
+  function addLlmConfig(payload) {
+    return api("/api/llm-configs", {method:"POST", body:JSON.stringify(payload)})
+      .then(function(){ return loadLlmConfigs(); });
+  }
+  function updateLlmConfig(id, payload) {
+    return api("/api/llm-configs/"+id, {method:"PATCH", body:JSON.stringify(payload)})
+      .then(function(){ return loadLlmConfigs(); });
+  }
+  function deleteLlmConfig(id) {
+    return api("/api/llm-configs/"+id, {method:"DELETE"})
+      .then(function(){ return loadLlmConfigs(); });
+  }
+  function activateLlmConfig(id) {
+    return api("/api/llm-configs/"+id+"/activate", {method:"POST"})
+      .then(function(){ return loadLlmConfigs(); });
+  }
+  function testLlmConfig(payload) {
+    return api("/api/llm-configs/test", {method:"POST", body:JSON.stringify(payload)});
   }
   function loadProfile(cid) {
     if(store.profileCache[cid]){store.expandedCustomer=cid;return Promise.resolve();}
@@ -307,7 +338,7 @@
       } catch(e){}
       applyRoute(location.hash);
     });
-    loadSummary(); loadMemories(); loadDataSources();
+    loadSummary(); loadMemories(); loadDataSources(); loadLlmConfigs();
   }
 
   /* ---- 模板 ---- */
@@ -461,7 +492,7 @@
     + '<a :class="navClass(\'assignments\')" href="#/assignments"><span class="nav-ico" v-html="icons.assignments"></span><span>智能分配</span></a>'
     + '<a :class="navClass(\'team\')" href="#/team"><span class="nav-ico" v-html="icons.team"></span><span>销售团队</span></a>'
     + '<a :class="navClass(\'memories\')" href="#/memories"><span class="nav-ico" v-html="icons.memories"></span><span>记忆中心</span></a>'
-    + '<a :class="navClass(\'sources\')" href="#/sources"><span class="nav-ico" v-html="icons.sources"></span><span>数据接入</span></a>'
+    + '<a :class="navClass(\'sources\')" href="#/sources"><span class="nav-ico" v-html="icons.sources"></span><span>数据与模型接入</span></a>'
     + '</template>'
     + '<template v-else>'
     + '<a :class="navClass(\'customers\')" href="#/customers"><span class="nav-ico" v-html="icons.customers"></span><span>我的客户画像</span></a>'
@@ -766,13 +797,15 @@
 
   var T_SRC = '<div class="view-anim">'
     + '<div class="toolbar">'
-    + '<div class="search-wrap"><span class="search-ico" v-html="ico.search"></span><input class="search-input" v-model="q" placeholder="搜索数据源名称 / 类型…"></div>'
+    + '<div class="search-wrap"><span class="search-ico" v-html="ico.search"></span><input class="search-input" v-model="q" placeholder="搜索数据源或大模型名称…"></div>'
     + '<div style="flex:1"></div>'
-    + '<button class="btn btn-ghost" @click="reload()" :disabled="loading"><span class="btn-ico" v-html="ico.refresh"></span>刷新</button>'
+    + '<button class="btn btn-ghost" @click="reload()" :disabled="loading"><span class="btn-ico" v-html="ico.refresh"></span>刷新全部</button>'
+    + '<button class="btn btn-ghost" style="color:#6366f1;border-color:#c7d2fe;background:#eef2ff" @click="openAddLlm()"><span class="btn-ico" v-html="ico.sparkles"></span>添加大模型</button>'
     + '<button class="btn btn-primary" @click="openAdd()"><span class="btn-ico" v-html="ico.plus"></span>添加数据源</button>'
     + '</div>'
-    + '<section class="card">'
-    + '<div class="card-head"><h3>数据源接入中心</h3><span class="card-sub" v-text="\'共 \'+filtered.length+\' 个数据源 · 选择类型并配置即可接入流水线，可随时启停与删除\'"></span></div>'
+    + '<!-- 1. 数据源中心 -->'
+    + '<section class="card" style="margin-bottom:24px">'
+    + '<div class="card-head"><h3>1. 数据源接入中心</h3><span class="card-sub" v-text="\'共 \'+filtered.length+\' 个数据源 · 选择类型并配置即可接入流水线，可随时启停与删除\'"></span></div>'
     + '<div class="empty-hint" v-if="!loading && filtered.length===0">暂无数据源，点击右上角「添加数据源」开始接入</div>'
     + '<div class="ds-grid" v-else>'
     + '<div class="ds-card" v-for="s in filtered" :key="s.id" :class="{\'ds-disabled\': !s.enabled}">'
@@ -797,9 +830,47 @@
     + '</div>'
     + '</div>'
     + '</section>'
+    + '<!-- 2. 大模型设置 (位于数据源下方) -->'
+    + '<section class="card">'
+    + '<div class="card-head">'
+    + '<div><h3>2. 大模型接入与切换 (LLM)</h3>'
+    + '<span class="card-sub">支持 DeepSeek / Kimi / 小米 MiMo 等一切 OpenAI 兼容接口 · 填入 API Key 即可一键启用</span></div>'
+    + '<div style="display:flex;gap:8px">'
+    + '<button class="btn btn-small" style="background:#6366f1;color:#fff;font-weight:700" @click="openAddLlm()"><span class="btn-ico" v-html="ico.plus"></span>添加模型配置</button>'
+    + '</div></div>'
+    + '<div class="empty-hint" v-if="!loadingLlm && llmList.length===0">暂无模型配置，点击上方「添加模型配置」或从预置模板开始</div>'
+    + '<div class="ds-grid" v-else>'
+    + '<div class="ds-card" v-for="m in filteredLlm" :key="m.id" :style="m.active?\'border-color:#6366f1;box-shadow:0 0 0 1px #6366f1,0 4px 14px rgba(99,102,241,0.15);background:linear-gradient(to bottom,#ffffff,#fdfcfe)\':\'\'">'
+    + '<div class="ds-card-top">'
+    + '<div class="ds-type-icon" style="background:rgba(99,102,241,0.12);color:#6366f1;border-color:rgba(99,102,241,0.3)"><span v-html="ico.sparkles"></span></div>'
+    + '<div class="ds-title"><strong v-text="m.name"></strong>'
+    + '<div class="ds-type-label"><span v-text="m.model"></span>'
+    + '<span v-if="m.active" class="ds-builtin" style="background:#6366f1;color:#fff">当前启用</span>'
+    + '<span v-if="!m.has_key" class="ds-builtin" style="background:#fef3c7;color:#d97706">未填 Key</span>'
+    + '</div></div>'
+    + '<div class="ds-status"><span class="badge" :class="m.active?\'badge-ok\':\'badge\'" v-text="m.active?\'使用中\':\'闲置\'"></span></div>'
+    + '</div>'
+    + '<div class="ds-config">'
+    + '<div class="ds-config-row"><span class="ds-config-key">api_base</span><code v-text="m.api_base||\'(未配置)\'"></code></div>'
+    + '<div class="ds-config-row"><span class="ds-config-key">api_key</span><code v-text="m.api_key_masked||\'未填写\'" :style="!m.has_key?\'color:#d97706\':\'\'"></code></div>'
+    + '<div class="ds-config-row"><span class="ds-config-key">model</span><code v-text="m.model||\'(未配置)\'"></code></div>'
+    + '</div>'
+    + '<div class="ds-desc" v-text="m.desc||\'OpenAI 兼容端点\'"></div>'
+    + '<div class="ds-foot">'
+    + '<span class="muted" style="font-size:11px" v-text="\'协议: \'+m.provider"></span>'
+    + '<div style="flex:1"></div>'
+    + '<button v-if="!m.active" class="btn btn-small" style="background:#6366f1;color:#fff;font-weight:700" @click="activateLlm(m)" :disabled="busyLlm===m.id"><span class="btn-ico" v-html="ico.check"></span>设为启用</button>'
+    + '<button class="btn btn-small" style="background:#f1f5f9;color:#334155" @click="testLlm(m)" :disabled="testingId===m.id"><span class="btn-ico" v-html="ico.play"></span><span v-text="testingId===m.id?\'测试中…\':\'测试连通\'"></span></button>'
+    + '<button class="btn btn-small" style="background:#eef2ff;color:#4338ca;font-weight:700" @click="openEditLlm(m)"><span class="btn-ico" v-html="ico.edit"></span>编辑</button>'
+    + '<button v-if="!m.active" class="btn btn-small" style="background:#fee2e2;color:#ef4444" @click="delLlm(m)"><span class="btn-ico" v-html="ico.trash"></span>删除</button>'
+    + '</div>'
+    + '</div>'
+    + '</div>'
+    + '</section>'
+    + '<!-- 数据源弹窗 -->'
     + '<div class="modal-mask" v-if="showModal" @click.self="showModal=false">'
     + '<div class="modal" style="width:520px;max-width:95vw">'
-    + '<h3 v-text="(editing?\'\':\'添加数据源\')"></h3>'
+    + '<h3 v-text="(editing?\'编辑数据源\':\'添加数据源\')"></h3>'
     + '<div class="modal-body">'
     + '<div style="margin-bottom:14px"><label>数据源类型</label>'
     + '<div class="ds-type-picker">'
@@ -815,6 +886,24 @@
     + '</div>'
     + '<div class="modal-actions"><button class="btn btn-ghost" @click="showModal=false">取消</button>'
     + '<button class="btn btn-primary" @click="save()" :disabled="saving"><span v-text="saving?\'保存中…\':(editing?\'保存修改\':\'确认接入\')"></span></button></div></div></div>'
+    + '<!-- 模型配置弹窗 -->'
+    + '<div class="modal-mask" v-if="showLlmModal" @click.self="showLlmModal=false">'
+    + '<div class="modal" style="width:540px;max-width:95vw">'
+    + '<h3 v-text="(editingLlm?\'编辑模型配置\':\'添加大模型配置\')"></h3>'
+    + '<div class="modal-body">'
+    + '<div v-if="!editingLlm" style="margin-bottom:14px"><label>快速选择预置模板</label>'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">'
+    + '<button v-for="t in llmTemplates" :key="t.name" type="button" class="btn btn-small btn-ghost" style="border:1px solid #cbd5e1" @click="applyTemplate(t)"><span v-text="t.name"></span></button>'
+    + '</div></div>'
+    + '<div style="margin-bottom:12px"><label>模型展示名称 <span style="color:#ef4444">*</span></label><input v-model="llmForm.name" class="search-input full" placeholder="如 DeepSeek / Kimi / 小米 MiMo"></div>'
+    + '<div style="margin-bottom:12px"><label>API Base URL <span style="color:#ef4444">*</span></label><input v-model="llmForm.api_base" class="search-input full" placeholder="https://api.deepseek.com/v1 或 https://api.moonshot.cn/v1"></div>'
+    + '<div style="margin-bottom:12px"><label>API Key <span style="color:#ef4444">*</span> <small style="color:#64748b" v-if="editingLlm">(留空表示不修改已有 Key)</small></label><input type="password" v-model="llmForm.api_key" class="search-input full" placeholder="sk-..."></div>'
+    + '<div style="margin-bottom:12px"><label>Model 名称 <span style="color:#ef4444">*</span></label><input v-model="llmForm.model" class="search-input full" placeholder="deepseek-chat / moonshot-v1-32k / mimo-7b-instruct 等"></div>'
+    + '<div style="margin-bottom:12px"><label>描述 / 说明</label><input v-model="llmForm.desc" class="search-input full" placeholder="选填，如 国内直连/主力模型"></div>'
+    + '<p style="font-size:12px;color:#64748b;line-height:1.6;margin:0">💡 只要提供 OpenAI 兼容接口的大模型（DeepSeek、Kimi、小米 MiMo、通义、智谱等）均可无缝接入，保存并设为启用后实时生效。</p>'
+    + '</div>'
+    + '<div class="modal-actions"><button class="btn btn-ghost" @click="showLlmModal=false">取消</button>'
+    + '<button class="btn btn-primary" @click="saveLlm()" :disabled="savingLlm"><span v-text="savingLlm?\'保存中…\':(editingLlm?\'保存修改\':\'确认添加\')"></span></button></div></div></div>'
     + '</div>';
 
   var T_TOAST = '<div class="toast-stack">'
@@ -1086,7 +1175,14 @@
         editing: null,
         saving: false,
         busy: "",
-        form: { name: "", type: "csv", config: {} }
+        form: { name: "", type: "csv", config: {} },
+        // 大模型相关状态
+        showLlmModal: false,
+        editingLlm: null,
+        savingLlm: false,
+        busyLlm: 0,
+        testingId: 0,
+        llmForm: { name: "", api_base: "", api_key: "", model: "", desc: "", provider: "openai" }
       };
     },
     computed: {
@@ -1094,6 +1190,9 @@
       list: function(){return store.dataSources || [];},
       types: function(){return store.sourceTypes || {};},
       loading: function(){return store.loadingSources;},
+      llmList: function(){return store.llmConfigs || [];},
+      llmTemplates: function(){return store.llmTemplates || [];},
+      loadingLlm: function(){return store.loadingLlmConfigs;},
       filtered: function(){
         var kw = this.q.trim().toLowerCase(), l = this.list;
         if(!kw) return l;
@@ -1101,12 +1200,20 @@
           return (s.name||"").toLowerCase().indexOf(kw) >= 0 ||
                  (s.type_label||"").toLowerCase().indexOf(kw) >= 0;
         });
+      },
+      filteredLlm: function(){
+        var kw = this.q.trim().toLowerCase(), l = this.llmList;
+        if(!kw) return l;
+        return l.filter(function(m){
+          return (m.name||"").toLowerCase().indexOf(kw) >= 0 ||
+                 (m.model||"").toLowerCase().indexOf(kw) >= 0;
+        });
       }
     },
     methods: {
-      reload: function(){ loadDataSources(); },
+      reload: function(){ loadDataSources(); loadLlmConfigs(); },
       typeIcon: function(t){
-        var map = { csv:"file", wework:"chat", crm:"database", webhook:"link" };
+        var map = { csv:"file", wework:"chat", crm:"database", webhook:"link", phone_call:"flame", qikebao:"database" };
         return ICONS[map[t] || "database"];
       },
       typeIconStyle: function(t){
@@ -1114,7 +1221,9 @@
           csv:  "background:rgba(56,189,248,0.15);color:#38bdf8;border-color:rgba(56,189,248,0.3)",
           wework:"background:rgba(52,211,153,0.15);color:#34d399;border-color:rgba(52,211,153,0.3)",
           crm:  "background:rgba(168,85,247,0.15);color:#c084fc;border-color:rgba(168,85,247,0.3)",
-          webhook:"background:rgba(251,146,60,0.15);color:#fb923c;border-color:rgba(251,146,60,0.3)"
+          webhook:"background:rgba(251,146,60,0.15);color:#fb923c;border-color:rgba(251,146,60,0.3)",
+          phone_call:"background:rgba(244,63,94,0.15);color:#f43f5e;border-color:rgba(244,63,94,0.3)",
+          qikebao:"background:rgba(99,102,241,0.15);color:#6366f1;border-color:rgba(99,102,241,0.3)"
         };
         return colors[t] || "background:rgba(100,116,139,0.15);color:#94a3b8;border-color:rgba(100,116,139,0.3)";
       },
@@ -1193,6 +1302,112 @@
             toast("删除失败: " + e.message, "error");
           });
         }
+      },
+      // ---- 大模型配置方法 ----
+      openAddLlm: function(){
+        this.editingLlm = null;
+        this.llmForm = { name: "", api_base: "", api_key: "", model: "", desc: "", provider: "openai" };
+        this.showLlmModal = true;
+      },
+      applyTemplate: function(t){
+        this.llmForm.name = t.name;
+        this.llmForm.api_base = t.api_base;
+        this.llmForm.model = t.model;
+        this.llmForm.desc = t.desc;
+        this.llmForm.provider = t.provider || "openai";
+      },
+      openEditLlm: function(m){
+        this.editingLlm = m;
+        this.llmForm = {
+          name: m.name,
+          api_base: m.api_base,
+          api_key: "", // 保持留空表示不修改已有 key
+          model: m.model,
+          desc: m.desc,
+          provider: m.provider || "openai"
+        };
+        this.showLlmModal = true;
+      },
+      saveLlm: function(){
+        var self = this;
+        if(!this.llmForm.name.trim()) { toast("请填写模型展示名称", "error"); return; }
+        if(!this.llmForm.api_base.trim()) { toast("请填写 API Base URL", "error"); return; }
+        if(!this.editingLlm && !this.llmForm.api_key.trim()) { toast("请填写 API Key", "error"); return; }
+        if(!this.llmForm.model.trim()) { toast("请填写 Model 名称", "error"); return; }
+        this.savingLlm = true;
+        var p;
+        if(this.editingLlm){
+          var payload = {
+            name: this.llmForm.name.trim(),
+            api_base: this.llmForm.api_base.trim(),
+            model: this.llmForm.model.trim(),
+            desc: this.llmForm.desc.trim()
+          };
+          if(this.llmForm.api_key.trim()) payload.api_key = this.llmForm.api_key.trim();
+          p = updateLlmConfig(this.editingLlm.id, payload);
+        } else {
+          p = addLlmConfig({
+            name: this.llmForm.name.trim(),
+            api_base: this.llmForm.api_base.trim(),
+            api_key: this.llmForm.api_key.trim(),
+            model: this.llmForm.model.trim(),
+            desc: this.llmForm.desc.trim(),
+            provider: this.llmForm.provider || "openai"
+          });
+        }
+        p.then(function(){
+          self.showLlmModal = false;
+          self.editingLlm = null;
+          toast("模型配置保存成功", "success");
+        }).catch(function(e){
+          toast("保存失败: " + e.message, "error");
+        }).finally(function(){
+          self.savingLlm = false;
+        });
+      },
+      activateLlm: function(m){
+        var self = this;
+        if(!m.has_key){
+          toast("该配置尚未填写 API Key，请先点击「编辑」填入 Key 后再启用", "error");
+          return;
+        }
+        this.busyLlm = m.id;
+        activateLlmConfig(m.id).then(function(){
+          toast("已切换当前启用模型为「" + m.name + " (" + m.model + ")」", "success");
+        }).catch(function(e){
+          toast("切换失败: " + e.message, "error");
+        }).finally(function(){
+          self.busyLlm = 0;
+        });
+      },
+      testLlm: function(m){
+        var self = this;
+        if(!m.has_key){
+          toast("该配置尚未填写 API Key，请先点击「编辑」填入 Key 后再测试", "error");
+          return;
+        }
+        this.testingId = m.id;
+        testLlmConfig({
+          api_base: m.api_base,
+          api_key: "USE_STORED",
+          model: m.model,
+          config_id: m.id
+        }).then(function(res){
+          toast("连通测试成功！模型回复: " + (res.reply || "正常"), "success");
+        }).catch(function(e){
+          toast("测试失败: " + e.message, "error");
+        }).finally(function(){
+          self.testingId = 0;
+        });
+      },
+      delLlm: function(m){
+        if(confirm("确定要删除大模型配置「" + m.name + "」吗？")) {
+          deleteLlmConfig(m.id).then(function(){
+            toast("已删除模型配置「" + m.name + "」", "info");
+          }).catch(function(e){
+            toast("删除失败: " + e.message, "error");
+          });
+        }
       }
     }
   };
@@ -1220,7 +1435,7 @@
       loggingIn: function(){return store.loggingIn;},
       feishuEnabled: function(){return store.feishuEnabled;},
       feishuLogging: function(){return store.feishuLogging;},
-      pageTitle: function(){return{dashboard:"工作台",customers:"客户画像",assignments:"智能分配",team:"销售团队",memories:"记忆中心",sources:"数据接入"}[store.route]||"易销";}
+      pageTitle: function(){return{dashboard:"工作台",customers:"客户画像",assignments:"智能分配",team:"销售团队",memories:"记忆中心",sources:"数据与模型接入"}[store.route]||"易销";}
     },
     methods: {
       navClass: function(name){ return store.route === name ? "yx-nav-item active" : "yx-nav-item"; },

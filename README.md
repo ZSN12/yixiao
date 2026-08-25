@@ -232,12 +232,14 @@ sales-agent/
 > 未配置 `FEISHU_APP_ID` 或前端不在 `FEISHU_WEBAPP_URL` 下访问时，登录页会隐藏该按钮，
 > 不影响超管（admin/123456）与普通账号登录。
 
-### LLM 后端切换（Kimi / OpenAI 兼容）
+### 大模型接入与切换（界面可视化配置）
 
-- **Kimi（默认）**: `LLM_PROVIDER=kimi` + `KIMI_API_KEY`。画像分析、销售画像、话术生成均走 Kimi K2.7 Code。
-- **OpenAI 兼容（预留）**: `LLM_PROVIDER=openai` + `LLM_API_KEY` / `LLM_API_BASE` / `LLM_MODEL`。可接 OpenAI / DeepSeek / 通义 / vLLM 等一切 Chat Completions 兼容端点。
-- **无 Key 兜底**: 未配置 key 时，画像走规则引擎（关键词打分）、RAG 走本地 2-gram 相似度、话术走规则模板。
-- **自动降级**: 任意 LLM / embedding 调用失败都记日志并降级，流水线不中断。
+系统支持直接在 Web 看板 **「数据与模型接入」** 页面中可视化添加、编辑、切换与测试大模型：
+- **预置模板**: 预置 **DeepSeek** (`deepseek-chat`)、**Kimi** (`moonshot-v1-32k`)、**小米 MiMo** (`mimo-7b-instruct`) 等常用模型；
+- **自定义 OpenAI 兼容端点**: 填入任意提供商的 `API Base URL`、`API Key` 和 `Model 名称`（如通义千问、智谱 GLM、本地 Ollama/vLLM）即可接入；
+- **动态生效**: 超级管理员点击「设为启用」即可实时切换主力大模型，无需修改 `.env` 或重启后端；
+- **一键测试连通**: 提供「测试连通」功能，直接在界面检验当前填写的 Key 与 Base 是否可连通；
+- **未配置自动降级**: 当未填写 Key 或所有模型调用失败时，画像分析自动回退到规则引擎（关键词打分），流水线不中断。
 
 ---
 

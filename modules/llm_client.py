@@ -41,7 +41,13 @@ logger = logging.getLogger(__name__)
 # ============================================================
 
 def _provider() -> str:
-    """返回当前生效的 provider 名称("kimi" | "openai"), 非法值回落 kimi。"""
+    """返回当前生效的 provider 名称("kimi" | "openai"), 非法值回落 kimi。
+
+    优先判断界面配置(activate 的 openai 配置), 其次回退 settings 的静态配置。
+    """
+    cfg = _active_store_config()
+    if cfg:
+        return cfg["provider"]
     raw = (getattr(settings, "llm_provider", "") or "kimi").strip().lower()
     if raw not in ("kimi", "openai"):
         logger.warning("未知 LLM_PROVIDER=%r, 回落默认 kimi", raw)
@@ -49,8 +55,24 @@ def _provider() -> str:
     return raw
 
 
+def _active_store_config() -> dict:
+    """读取界面激活的模型配置; 未配置或未填 key 时返回 None。
+
+    延迟导入 llm_config_store, 避免与 data_loader 建表顺序产生循环依赖。
+    """
+    try:
+        from modules import llm_config_store
+        return llm_config_store.get_active_config()
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("读取界面模型配置失败, 回退 settings: %s", exc)
+        return None
+
+
 def enabled() -> bool:
     """当前 provider 是否已配置 key(未配置时业务应走规则引擎)。"""
+    cfg = _active_store_config()
+    if cfg:
+        return bool(cfg.get("api_key", "").strip())
     if _provider() == "openai":
         return bool((getattr(settings, "llm_api_key", "") or "").strip())
     return bool((getattr(settings, "kimi_api_key", "") or "").strip())
@@ -72,12 +94,23 @@ def _chat_openai(
     """OpenAI 兼容后端: Chat Completions 接口(openai SDK, 可选依赖)。
 
     json_mode=True 时请求 response_format={"type": "json_object"}。
+    优先用界面激活的模型配置(api_key/base/model), 否则回退 settings 静态配置。
     """
     from openai import OpenAI  # 延迟导入: openai 为可选依赖
 
+    cfg = _active_store_config()
+    if cfg:
+        api_key = cfg["api_key"]
+        api_base = cfg["api_base"]
+        model = cfg["model"]
+    else:
+        api_key = settings.llm_api_key
+        api_base = settings.llm_api_base
+        model = settings.llm_model
+
     client = OpenAI(
-        api_key=settings.llm_api_key,
-        base_url=settings.llm_api_base,
+        api_key=api_key,
+        base_url=api_base,
         timeout=settings.llm_timeout,
     )
     messages: list = []
@@ -86,7 +119,7 @@ def _chat_openai(
     messages.append({"role": "user", "content": user})
 
     kwargs: Dict[str, Any] = {
-        "model": settings.llm_model,
+        "model": model,
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens,

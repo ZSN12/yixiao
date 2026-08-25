@@ -16,6 +16,8 @@ data/*.db
 
 # 二进制工具(cloudflared 等, 不入库)
 bin/
+.cloudflared-bin
+*.tgz
 
 # 运行时同步状态层(动态演示数据, 不入库)
 data/bitable_sync_state.json

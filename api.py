@@ -9,6 +9,7 @@
 - notes.py        : 跟进小记 / AI 话术 / 人工复核反馈。
 - sla.py          : SLA 超时预警 + 自动流转公海。
 - feishu.py       : 飞书卡片按钮交互回调。
+- llm_config.py   : 大模型配置 CRUD(DeepSeek / Kimi / 小米 MiMo 等, 超管可切换)。
 - phone_webhook.py: 电话录音 webhook 回调 + 低置信度角色复核。
 - static.py       : 静态资源托管 + 根路由 + 健康检查。
 
@@ -34,9 +35,10 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from modules import data_source_registry  # noqa: E402
+from modules import llm_config_store  # noqa: E402
 from modules import user_auth  # noqa: E402
 
-from api_routes import auth, customers, data_sources, feishu, feishu_auth, notes, phone_webhook, pipeline, sla, static  # noqa: E402
+from api_routes import auth, customers, data_sources, feishu, feishu_auth, llm_config, notes, phone_webhook, pipeline, sla, static  # noqa: E402
 from api_routes.common import _global_exception_handler  # noqa: E402
 
 logger = logging.getLogger(__name__)
@@ -56,6 +58,10 @@ async def _lifespan(app: FastAPI):
         data_source_registry.ensure_seed_sources()
     except Exception as exc:  # noqa: BLE001
         logger.warning("启动时写入预置数据源失败: %s", exc)
+    try:
+        llm_config_store.ensure_seed_llm_configs()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("启动时写入预置模型配置失败: %s", exc)
     yield
 
 
@@ -78,6 +84,7 @@ app.include_router(notes.router)
 app.include_router(sla.router)
 app.include_router(feishu.router)
 app.include_router(feishu_auth.router)
+app.include_router(llm_config.router)
 app.include_router(phone_webhook.router)
 app.include_router(static.router)
 
