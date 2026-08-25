@@ -58,6 +58,14 @@ class Settings(BaseSettings):
     embedding_api_base: str = ""    # 如 "https://api.openai.com/v1" 或通义等兼容端点
     embedding_api_key: str = ""
     embedding_model: str = ""       # 如 "text-embedding-3-small"
+    # 电话录音 ASR(adapters/phone_call_adapter): 语音转写 + 说话人角色判定
+    asr_provider: str = "mock"           # mock | aliyun | tencent | xfyun
+    asr_api_key: str = ""
+    asr_api_secret: str = ""
+    asr_app_id: str = ""                 # 讯飞等需要
+    asr_timeout: float = 120.0
+    phone_role_llm_fallback: bool = True  # Tier-3 是否启用 LLM 角色兜底
+    phone_role_min_confidence: float = 0.7  # 低于此值打 review 标记
 
 
 settings = Settings()

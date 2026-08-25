@@ -1,0 +1,13 @@
+[
+  {
+    "call_id": "CALL001",
+    "customer_id": "C001",
+    "sales_id": "S001",
+    "call_time": "2026-08-23T14:30:00",
+    "direction": "outbound",
+    "sales_mobile": "13800001111",
+    "customer_mobile": "13900002222",
+    "audio_path": "",
+    "transcript_demo_id": "CALL001"
+  }
+]

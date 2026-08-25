@@ -69,6 +69,15 @@ SOURCE_TYPES: Dict[str, dict] = {
         "desc": "填任意返回 JSON 的 API 地址接入",
         "fields": [{"key": "endpoint", "label": "接口地址", "placeholder": "https://api.example.com/leads", "required": True}],
     },
+    "phone_call": {
+        "label": "电话录音",
+        "icon": "phone",
+        "desc": "对接呼叫中心/CRM 电话录音（ASR + 说话人角色识别）",
+        "fields": [
+            {"key": "manifest_path", "label": "通话清单 JSON", "placeholder": "data/real/phone_call_manifest.json", "required": True},
+            {"key": "asr_provider", "label": "ASR 提供商", "placeholder": "mock|aliyun|tencent", "required": False},
+        ],
+    },
 }
 
 # 系统预置数据源(首次启动写入, 作为可编辑/可启停的起点)
@@ -77,6 +86,7 @@ BUILTIN_SOURCES: List[dict] = [
     {"name": "企微会话存档", "type": "wework", "config": {"file_path": "data/real/wework_chat_export.json"}, "enabled": True, "status": "预留", "builtin": True},
     {"name": "CRM 成交商机", "type": "crm", "config": {"api_base": "https://crm.example.com/api", "api_key": ""}, "enabled": True, "status": "预留", "builtin": True},
     {"name": "飞书多维表同步", "type": "bitable", "config": {"base_token": "", "leads_table": "tbluJCdsnsMaWYYD"}, "enabled": True, "status": "预留", "builtin": True},
+    {"name": "电话录音(演示)", "type": "phone_call", "config": {"manifest_path": "data/real/phone_call_manifest.json", "asr_provider": "mock"}, "enabled": False, "status": "待接入", "builtin": True},
 ]
 
 

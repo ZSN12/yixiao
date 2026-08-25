@@ -1,0 +1,9 @@
+{
+  "CALL001": [
+    {"speaker": "Speaker_0", "text": "王总您好，我是易销科技的小张，之前跟您提过的智能制造产线改造方案，已经发到您邮箱了。", "start_ms": 0, "end_ms": 8000, "confidence": 0.99},
+    {"speaker": "Speaker_1", "text": "收到了，方案整体不错。我们今年设备采购预算大概有500万，如果价格能谈下来，可以尽快立项。", "start_ms": 9000, "end_ms": 18000, "confidence": 0.98},
+    {"speaker": "Speaker_0", "text": "没问题，我们可以按年度框架合同来谈，报价我这边再优化一下，时间上完全配合您的采购计划。", "start_ms": 19000, "end_ms": 27000, "confidence": 0.97},
+    {"speaker": "Speaker_1", "text": "行，价格能谈下来就行，我们这边预算充足，希望尽快推进。", "start_ms": 28000, "end_ms": 33000, "confidence": 0.96},
+    {"speaker": "Speaker_0", "text": "好的王总，那我把最终报价单明天发您，后续跟进我随时跟您汇报。", "start_ms": 34000, "end_ms": 40000, "confidence": 0.98}
+  ]
+}
