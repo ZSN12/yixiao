@@ -482,17 +482,47 @@
     + '<button class="chip" :class="!onlyMine?\'chip-on\':\'\'" @click="onlyMine=false">查看全部公海 ({{ allCount }})</button>'
     + '</div></div>'
     + '<div class="filter-bar">'
-    + '<span class="filter-label">意向</span>'
-    + '<button class="chip" :class="fInt===\'\'?\'chip-on\':\'\'" @click="fInt=\'\'">全部</button>'
-    + '<button class="chip" :class="fInt===\'高\'?\'chip-on\':\'\'" @click="fInt=\'高\'">高意向</button>'
-    + '<button class="chip" :class="fInt===\'中\'?\'chip-on\':\'\'" @click="fInt=\'中\'">中意向</button>'
-    + '<button class="chip" :class="fInt===\'低\'?\'chip-on\':\'\'" @click="fInt=\'低\'">低意向</button>'
-    + '<span class="filter-sep"></span>'
-    + '<span class="filter-label">流失</span>'
-    + '<button class="chip" :class="fChurn===\'\'?\'chip-on\':\'\'" @click="fChurn=\'\'">全部</button>'
-    + '<button class="chip" :class="fChurn===\'高\'?\'chip-on\':\'\'" @click="fChurn=\'高\'">高风险</button>'
-    + '<button class="chip" :class="fChurn===\'中\'?\'chip-on\':\'\'" @click="fChurn=\'中\'">中风险</button>'
-    + '<button class="chip" :class="fChurn===\'低\'?\'chip-on\':\'\'" @click="fChurn=\'低\'">低风险</button>'
+    + '<div class="filter-item">'
+    + '<span class="filter-label">意向分层:</span>'
+    + '<div class="filter-select-wrap">'
+    + '<select class="filter-select" v-model="fInt">'
+    + '<option value="">全部意向</option>'
+    + '<option value="高">🔥 高意向</option>'
+    + '<option value="中">⚡ 中意向</option>'
+    + '<option value="低">🌱 低意向</option>'
+    + '</select>'
+    + '<svg class="filter-select-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>'
+    + '</div>'
+    + '</div>'
+    + '<div class="filter-item">'
+    + '<span class="filter-label">流失风险:</span>'
+    + '<div class="filter-select-wrap">'
+    + '<select class="filter-select" v-model="fChurn">'
+    + '<option value="">全部风险</option>'
+    + '<option value="高">⚠️ 高风险</option>'
+    + '<option value="中">⚡ 中风险</option>'
+    + '<option value="低">🛡️ 低风险</option>'
+    + '</select>'
+    + '<svg class="filter-select-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>'
+    + '</div>'
+    + '</div>'
+    + '<div class="filter-item">'
+    + '<span class="filter-label">社保人数:</span>'
+    + '<div class="filter-select-wrap">'
+    + '<select class="filter-select" v-model="fSocial">'
+    + '<option value="">全部社保人数</option>'
+    + '<option value="lt100">100 人以下</option>'
+    + '<option value="100-499">100 - 499 人</option>'
+    + '<option value="500-999">500 - 999 人</option>'
+    + '<option value="gte1000">1000 人及以上</option>'
+    + '<option value="none">未填写 / 暂无</option>'
+    + '</select>'
+    + '<svg class="filter-select-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>'
+    + '</div>'
+    + '</div>'
+    + '<button class="filter-reset-btn" v-if="fInt||\n      fChurn||fSocial" @click="fInt=\'\';fChurn=\'\';fSocial=\'\'">'
+    + '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg><span>重置筛选</span>'
+    + '</button>'
     + '</div>'
     + '<div class="empty-hint" v-if="!loading&&list.length===0">暂无客户数据</div>'
     + '<div class="empty-hint" v-else-if="!loading&&filtered.length===0">无匹配筛选的客户</div>'
@@ -733,7 +763,7 @@
 
   var C_Cust = {
     template: T_CUSTOMERS,
-    data: function(){return {expanded:"", fInt:"", fChurn:"", onlyMine: true};},
+    data: function(){return {expanded:"", fInt:"", fChurn:"", fSocial:"", onlyMine: true};},
     computed: {
       salesMode: function(){return store.salesMode;},
       currentSales: function(){return store.currentSales;},
@@ -754,6 +784,24 @@
         }
         if(this.fInt) l = l.filter(function(c){return c.intention_level===this.fInt;}.bind(this));
         if(this.fChurn) l = l.filter(function(c){return c.churn_risk===this.fChurn;}.bind(this));
+        if(this.fSocial) {
+          var sKey = this.fSocial;
+          l = l.filter(function(c){
+            var raw = c.social_security_count;
+            var num = null;
+            if (raw !== null && raw !== undefined && String(raw).trim() !== "") {
+              var parsed = parseInt(String(raw).replace(/[^0-9]/g, ""), 10);
+              if (!isNaN(parsed)) num = parsed;
+            }
+            if (sKey === "none") return num === null;
+            if (num === null) return false;
+            if (sKey === "lt100") return num < 100;
+            if (sKey === "100-499") return num >= 100 && num <= 499;
+            if (sKey === "500-999") return num >= 500 && num <= 999;
+            if (sKey === "gte1000") return num >= 1000;
+            return true;
+          });
+        }
         return l;
       },
       prof: function(){var d=store.profileCache[this.expanded];return d&&d.records&&d.records.length?d.records[0]:null;},
