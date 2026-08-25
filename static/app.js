@@ -595,9 +595,9 @@
     + '</div>'
     + '<div class="filter-menu" v-if="activeDropdown===\'int\'">'
     + '<div class="filter-option" :class="{\'selected\': fInt===\'\'}" @click="selectInt(\'\')"><span>全部意向</span><svg v-if="fInt===\'\'" class="filter-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>'
-    + '<div class="filter-option" :class="{\'selected\': fInt===\'高\'}" @click="selectInt(\'高\')"><span>🔥 高意向</span><svg v-if="fInt===\'高\'" class="filter-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>'
-    + '<div class="filter-option" :class="{\'selected\': fInt===\'中\'}" @click="selectInt(\'中\')"><span>⚡ 中意向</span><svg v-if="fInt===\'中\'" class="filter-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>'
-    + '<div class="filter-option" :class="{\'selected\': fInt===\'低\'}" @click="selectInt(\'低\')"><span>🌱 低意向</span><svg v-if="fInt===\'低\'" class="filter-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>'
+    + '<div class="filter-option" :class="{\'selected\': fInt===\'高\'}" @click="selectInt(\'高\')"><span>高意向</span><svg v-if="fInt===\'高\'" class="filter-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>'
+    + '<div class="filter-option" :class="{\'selected\': fInt===\'中\'}" @click="selectInt(\'中\')"><span>中意向</span><svg v-if="fInt===\'中\'" class="filter-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>'
+    + '<div class="filter-option" :class="{\'selected\': fInt===\'低\'}" @click="selectInt(\'低\')"><span>低意向</span><svg v-if="fInt===\'低\'" class="filter-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>'
     + '</div></div></div>'
     + '<div class="filter-item">'
     + '<span class="filter-label">流失风险:</span>'
@@ -608,9 +608,9 @@
     + '</div>'
     + '<div class="filter-menu" v-if="activeDropdown===\'churn\'">'
     + '<div class="filter-option" :class="{\'selected\': fChurn===\'\'}" @click="selectChurn(\'\')"><span>全部风险</span><svg v-if="fChurn===\'\'" class="filter-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>'
-    + '<div class="filter-option" :class="{\'selected\': fChurn===\'高\'}" @click="selectChurn(\'高\')"><span>⚠️ 高风险</span><svg v-if="fChurn===\'高\'" class="filter-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>'
-    + '<div class="filter-option" :class="{\'selected\': fChurn===\'中\'}" @click="selectChurn(\'中\')"><span>⚡ 中风险</span><svg v-if="fChurn===\'中\'" class="filter-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>'
-    + '<div class="filter-option" :class="{\'selected\': fChurn===\'低\'}" @click="selectChurn(\'低\')"><span>🛡️ 低风险</span><svg v-if="fChurn===\'低\'" class="filter-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>'
+    + '<div class="filter-option" :class="{\'selected\': fChurn===\'高\'}" @click="selectChurn(\'高\')"><span>高风险</span><svg v-if="fChurn===\'高\'" class="filter-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>'
+    + '<div class="filter-option" :class="{\'selected\': fChurn===\'中\'}" @click="selectChurn(\'中\')"><span>中风险</span><svg v-if="fChurn===\'中\'" class="filter-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>'
+    + '<div class="filter-option" :class="{\'selected\': fChurn===\'低\'}" @click="selectChurn(\'低\')"><span>低风险</span><svg v-if="fChurn===\'低\'" class="filter-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>'
     + '</div></div></div>'
     + '<div class="filter-item">'
     + '<span class="filter-label">社保人数:</span>'
@@ -636,7 +636,7 @@
     + '<table class="yx-table" v-if="filtered.length>0"><thead><tr><th>客户</th><th>行业</th><th>城市</th><th>规模</th><th>社保人数</th><th>归属</th><th>意向</th><th>流失</th><th class="row-action"></th></tr></thead><tbody>'
     + '<template v-for="c in filtered" :key="c.customer_id">'
     + '<tr :class="[\'clickable\',expanded===c.customer_id?\'row-open\':\'\']" @click="toggle(c)">'
-    + '<td><div><strong v-text="c.customer_name"></strong><div class="sub" v-text="c.customer_id"></div></div></td>'
+    + '<td><strong v-text="c.customer_name"></strong></td>'
     + '<td v-text="c.industry"></td><td v-text="c.city"></td><td v-text="c.scale"></td>'
     + '<td v-text="c.social_security_count?c.social_security_count+\' 人\':\'—\'"></td>'
     + '<td v-text="c.owner_sales_id||\'未分配\'"></td>'
@@ -949,11 +949,11 @@
       list: function(){return store.customers;},
       loading: function(){return store.loadingCustomers;},
       intLabel: function(){
-        var map = { "高": "🔥 高意向", "中": "⚡ 中意向", "低": "🌱 低意向" };
+        var map = { "高": "高意向", "中": "中意向", "低": "低意向" };
         return map[this.fInt] || "全部意向";
       },
       churnLabel: function(){
-        var map = { "高": "⚠️ 高风险", "中": "⚡ 中风险", "低": "🛡️ 低风险" };
+        var map = { "高": "高风险", "中": "中风险", "低": "低风险" };
         return map[this.fChurn] || "全部风险";
       },
       socialLabel: function(){
